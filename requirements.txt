@@ -1,0 +1,21 @@
+# MCP Server
+fastmcp>=0.2.0
+
+# Web (fastmcp)
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+
+# HTTP client y env
+httpx>=0.27.0
+python-dotenv>=1.0.0
+
+# LangChain + agente
+langchain>=1.2.0
+langchain-core>=1.2.0
+langchain-openai>=0.3.0
+langgraph>=0.2.0
+langgraph-checkpoint>=0.2.0
+openai>=1.12.0
+
+# Templates system prompt
+jinja2>=3.1.3
