@@ -100,7 +100,7 @@ MAX_TOKENS: int = _get_int("MAX_TOKENS", 2048, min_val=1, max_val=128000)
 # ---------------------------------------------------------------------------
 
 SERVER_HOST: str = _get_str("SERVER_HOST", "0.0.0.0")
-SERVER_PORT: int = _get_int("SERVER_PORT", 8003, min_val=1, max_val=65535)
+SERVER_PORT: int = _get_int("SERVER_PORT", 8001, min_val=1, max_val=65535)
 
 
 # ---------------------------------------------------------------------------
