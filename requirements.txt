@@ -35,6 +35,7 @@ jaraco.classes==3.4.0
 jaraco.context==6.1.0
 jaraco.functools==4.4.0
 jiter==0.13.0
+Jinja2
 jsonpatch==1.33
 jsonpointer==3.0.0
 jsonref==1.1.0
