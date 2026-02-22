@@ -129,3 +129,7 @@ API_INFORMACION_URL: str = _get_str(
     "API_INFORMACION_URL",
     "https://api.maravia.pe/servicio/ws_informacion_ia.php",
 )
+API_PREGUNTAS_FRECUENTES_URL: str = _get_str(
+    "API_PREGUNTAS_FRECUENTES_URL",
+    "https://api.maravia.pe/servicio/n8n/ws_preguntas_frecuentes.php",
+)

@@ -1,5 +1,6 @@
 from .config import (
     API_INFORMACION_URL,
+    API_PREGUNTAS_FRECUENTES_URL,
     API_TIMEOUT,
     CHAT_TIMEOUT,
     OPENAI_API_KEY,
@@ -15,6 +16,7 @@ from .config import (
 
 __all__ = [
     "API_INFORMACION_URL",
+    "API_PREGUNTAS_FRECUENTES_URL",
     "API_TIMEOUT",
     "CHAT_TIMEOUT",
     "OPENAI_API_KEY",
