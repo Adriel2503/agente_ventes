@@ -1,6 +1,6 @@
 # Agente Ventas — MaravIA
 
-Agente especializado en ventas directas diseñado para operar dentro del ecosistema multiagente de **MaravIA**. Recibe delegaciones del orquestador principal y guía al cliente a través del flujo completo de compra: búsqueda de productos, selección, modalidad de entrega, pago y confirmación.
+Agente especializado en ventas directas diseñado para operar dentro del ecosistema de **MaravIA**. El API gateway lo consume directamente (sin orquestador) y guía al cliente a través del flujo completo de compra: búsqueda de productos, selección, modalidad de entrega, pago y confirmación.
 
 ## Tabla de contenidos
 
@@ -12,7 +12,7 @@ Agente especializado en ventas directas diseñado para operar dentro del ecosist
 - [Ejecución](#ejecución)
   - [Local](#local)
   - [Docker](#docker)
-- [API / Tool MCP expuesta](#api--tool-mcp-expuesta)
+- [API HTTP expuesta](#api-http-expuesta)
 - [Flujo de ventas](#flujo-de-ventas)
 - [Herramientas internas del agente](#herramientas-internas-del-agente)
 - [Servicios externos](#servicios-externos)
@@ -22,11 +22,11 @@ Agente especializado en ventas directas diseñado para operar dentro del ecosist
 
 ## Descripción general
 
-El Agente Ventas es un microservicio que expone una única tool MCP (`venta_chat`) al orquestador. Internamente utiliza:
+El Agente Ventas es un microservicio HTTP que expone `POST /api/chat` al API gateway. Internamente utiliza:
 
 - **LangChain + LangGraph** para la lógica del agente con memoria de sesión
 - **OpenAI** (GPT-4o-mini por defecto) como LLM principal
-- **FastMCP / FastAPI** como servidor MCP
+- **FastAPI + uvicorn** como servidor HTTP
 - **Jinja2** para la generación dinámica del system prompt
 - **API MaravIA** para obtener categorías, sucursales, métodos de pago y búsqueda de productos
 
@@ -35,12 +35,12 @@ El Agente Ventas es un microservicio que expone una única tool MCP (`venta_chat
 ## Arquitectura
 
 ```
-Orquestador
+API Gateway
     │
-    │  MCP call: venta_chat(message, session_id, context)
+    │  POST /api/chat { message, session_id, context }
     ▼
 ┌─────────────────────────────────────────┐
-│  FastMCP Server  (puerto 8001)          │
+│  FastAPI Service  (puerto 8001)         │
 │                                         │
 │  process_venta_message()                │
 │    ├─ Validar contexto (id_empresa)     │
@@ -55,8 +55,9 @@ Orquestador
 │         └─ Tool: search_productos ────►│ API MaravIA
 └─────────────────────────────────────────┘
     │
-    │  Respuesta al orquestador
+    │  { reply, url: null }
     ▼
+API Gateway
 ```
 
 ---
@@ -66,8 +67,9 @@ Orquestador
 ```
 agent_ventas/
 ├── src/ventas/
-│   ├── main.py                    # Servidor FastMCP, tool venta_chat
+│   ├── main.py                    # Servidor FastAPI, POST /api/chat
 │   ├── logger.py                  # Configuración de logging
+│   ├── metrics.py                 # Métricas Prometheus
 │   ├── agent/
 │   │   └── agent.py               # Lógica del agente LangChain/LangGraph
 │   ├── config/
@@ -81,7 +83,9 @@ agent_ventas/
 │       ├── api_informacion.py     # Cliente HTTP compartido (httpx)
 │       ├── busqueda_productos.py  # Búsqueda y formateo de productos
 │       ├── categorias.py          # Obtención de categorías
+│       ├── contexto_negocio.py    # Contexto del negocio (cache + circuit breaker)
 │       ├── metodos_pago.py        # Métodos de pago
+│       ├── preguntas_frecuentes.py # FAQs por id_chatbot (cache TTL)
 │       └── sucursales.py          # Sucursales y horarios
 ├── run.py                         # Script de entrada
 ├── requirements.txt               # Dependencias Python
@@ -117,8 +121,8 @@ cp .env.example .env
 | `OPENAI_TEMPERATURE` | `0.5` | Temperatura del modelo (0.0–2.0) |
 | `OPENAI_TIMEOUT` | `90` | Timeout por llamada a OpenAI (segundos) |
 | `MAX_TOKENS` | `2048` | Máximo de tokens por respuesta |
-| `SERVER_HOST` | `0.0.0.0` | Host del servidor MCP |
-| `SERVER_PORT` | `8001` | Puerto del servidor MCP |
+| `SERVER_HOST` | `0.0.0.0` | Host del servidor |
+| `SERVER_PORT` | `8001` | Puerto del servidor |
 | `LOG_LEVEL` | `INFO` | Nivel de logging (DEBUG, INFO, WARNING, ERROR) |
 | `LOG_FILE` | *(vacío)* | Ruta de archivo de log (vacío = solo consola) |
 | `API_TIMEOUT` | `10` | Timeout por request HTTP a la API (segundos) |
@@ -153,12 +157,12 @@ python run.py
 El servidor arrancará en `http://0.0.0.0:8001` y registrará en consola:
 
 ```
-INICIANDO AGENTE VENTAS - MaravIA
+INICIANDO SERVICIO VENTAS - MaravIA
 Host: 0.0.0.0:8001
 Modelo: gpt-4o-mini
-Timeouts: OPENAI=90s, API=10s, CHAT=120s
-Tool expuesta al orquestador: venta_chat
-Tools internas: search_productos_servicios
+Endpoint: POST /api/chat
+Health:   GET  /health
+Metrics:  GET  /metrics
 ```
 
 ### Docker
@@ -175,34 +179,62 @@ La imagen usa Python 3.12 slim con usuario no-root y `PYTHONPATH` configurado.
 
 ---
 
-## API / Tool MCP expuesta
+## API HTTP expuesta
 
-El servidor expone una única tool al orquestador vía MCP:
+### `POST /api/chat`
 
-### `venta_chat`
+Endpoint principal consumido por el API gateway.
 
-| Parámetro | Tipo | Descripción |
-|---|---|---|
-| `message` | `str` | Mensaje del usuario (puede incluir URLs de imágenes) |
-| `session_id` | `int` | ID de sesión (mantiene contexto de conversación) |
-| `context` | `dict` | Contexto del negocio (ver campos abajo) |
-
-**Campos del objeto `context`:**
+**Request body:**
 
 ```json
 {
-  "config": {
-    "id_empresa": 123,              // REQUERIDO - ID de la empresa
-    "personalidad": "...",          // Instrucciones de personalidad del asistente
-    "nombre_negocio": "Mi Tienda",  // Nombre del negocio
-    "nombre_asistente": "Valeria",  // Nombre del asistente virtual
-    "propuesta_valor": "...",       // Propuesta de valor del negocio
-    "medios_pago": "..."            // Info adicional de medios de pago
+  "message": "Quiero comprar zapatos talla 40",
+  "session_id": 1234,
+  "context": {
+    "config": {
+      "id_empresa": 123,
+      "id_chatbot": 7,
+      "nombre_bot": "Valeria",
+      "personalidad": "...",
+      "nombre_negocio": "Mi Tienda",
+      "propuesta_valor": "...",
+      "medios_pago": "..."
+    }
   }
 }
 ```
 
-**Respuesta:** `str` con la respuesta del agente al usuario.
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `message` | `str` | Mensaje del usuario (puede incluir URLs de imágenes) |
+| `session_id` | `int` | ID de sesión (mantiene contexto de conversación) |
+| `context.config.id_empresa` | `int` | **Requerido.** ID de la empresa |
+| `context.config.id_chatbot` | `int` | Opcional. Para cargar FAQs del chatbot |
+| `context.config.nombre_bot` | `str` | Opcional. Nombre del asistente virtual |
+| `context.config.personalidad` | `str` | Opcional. Instrucciones de personalidad |
+| `context.config.nombre_negocio` | `str` | Opcional. Nombre del negocio |
+| `context.config.propuesta_valor` | `str` | Opcional. Propuesta de valor del negocio |
+| `context.config.medios_pago` | `str` | Opcional. Info adicional de medios de pago |
+
+**Response:**
+
+```json
+{
+  "reply": "¡Hola! Con gusto te ayudo a encontrar zapatos...",
+  "url": null
+}
+```
+
+### `GET /health`
+
+```json
+{ "status": "ok", "agent": "ventas", "version": "2.0.0" }
+```
+
+### `GET /metrics`
+
+Métricas en formato Prometheus.
 
 ---
 
@@ -259,7 +291,8 @@ Todos los servicios consumen el mismo endpoint `API_INFORMACION_URL` mediante un
 | `obtener_categorias()` | `OBTENER_CATEGORIAS` | Categorías del catálogo de productos |
 | `obtener_sucursales()` | `OBTENER_SUCURSALES_PUBLICAS` | Sucursales con dirección y horarios |
 | `obtener_metodos_pago()` | `OBTENER_METODOS_PAGO` | Bancos y billeteras digitales (Yape, Plin) |
-| `fetch_contexto_negocio()` | `OBTENER_CONTEXTO_NEGOCIO` | Contexto del negocio (se inyecta en el system prompt cuando está disponible; cache TTL, circuit breaker y retry) |
+| `fetch_contexto_negocio()` | `OBTENER_CONTEXTO_NEGOCIO` | Contexto del negocio (cache TTL, circuit breaker y retry) |
+| `fetch_preguntas_frecuentes()` | *(endpoint FAQs)* | Preguntas frecuentes del chatbot (cache TTL por id_chatbot) |
 | `buscar_productos_servicios()` | `BUSCAR_PRODUCTOS_SERVICIOS_VENTAS_DIRECTAS` | Búsqueda en catálogo |
 
 El cliente HTTP es un `httpx.AsyncClient` compartido (lazy-init) que se cierra limpiamente al apagar el servidor.
@@ -272,10 +305,10 @@ El cliente HTTP es un `httpx.AsyncClient` compartido (lazy-init) que se cierra l
 El agente detecta automáticamente URLs de imágenes en los mensajes del usuario (formatos: jpg, jpeg, png, gif, webp) y las envía al modelo como bloques de visión de OpenAI. Esto permite validar comprobantes de pago enviados como capturas de pantalla.
 
 ### System prompt dinámico con Jinja2
-El prompt del sistema se genera en cada sesión con datos reales del negocio: categorías actualizadas, sucursales con horarios compactos, métodos de pago vigentes y contexto de negocio (cuando la API lo devuelve). Si alguna API falla, el agente continúa funcionando con valores por defecto (degradación graceful).
+El prompt del sistema se genera en cada sesión con datos reales del negocio: categorías actualizadas, sucursales con horarios compactos, métodos de pago vigentes, FAQs del chatbot y contexto de negocio. Si alguna API falla, el agente continúa funcionando con valores por defecto (degradación graceful).
 
 ### Memoria de sesión
-Usa `InMemorySaver` de LangGraph para mantener el historial de conversación dentro de una sesión. El `thread_id` se deriva del `session_id` recibido del orquestador, garantizando continuidad de contexto entre mensajes.
+Usa `InMemorySaver` de LangGraph para mantener el historial de conversación dentro de una sesión. El `thread_id` se deriva del `session_id` recibido del gateway, garantizando continuidad de contexto entre mensajes.
 
 ### Gestión de timeouts en capas
 - `API_TIMEOUT`: límite por cada request HTTP individual
@@ -283,4 +316,4 @@ Usa `InMemorySaver` de LangGraph para mantener el historial de conversación den
 - `CHAT_TIMEOUT`: límite global por mensaje completo (incluye tool calls y razonamiento)
 
 ### Logging estructurado
-Prefijos por módulo (`[MCP]`, `[AGENT]`, `[TOOL]`, `[API_INFORMACION]`, `[CONTEXTO_NEGOCIO]`) para facilitar el rastreo de flujos en producción. Nivel y destino configurables vía variables de entorno.
+Prefijos por módulo (`[HTTP]`, `[AGENT]`, `[TOOL]`, `[API_INFORMACION]`, `[CONTEXTO_NEGOCIO]`) para facilitar el rastreo de flujos en producción. Nivel y destino configurables vía variables de entorno.
