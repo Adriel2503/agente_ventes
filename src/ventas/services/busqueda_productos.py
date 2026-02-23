@@ -19,9 +19,11 @@ from cachetools import TTLCache
 
 try:
     from .. import config as app_config
+    from ..metrics import SEARCH_CACHE
     from ..services.api_informacion import post_informacion
 except ImportError:
     from ventas import config as app_config
+    from ventas.metrics import SEARCH_CACHE
     from ventas.services.api_informacion import post_informacion
 
 logger = logging.getLogger(__name__)
@@ -151,11 +153,13 @@ async def buscar_productos_servicios(
 
     # 1. Cache hit — respuesta inmediata sin tocar la red
     if cache_key in _busqueda_cache:
+        SEARCH_CACHE.labels(result="hit").inc()
         logger.debug("[BUSQUEDA] Cache HIT id_empresa=%s busqueda=%r", id_empresa, busqueda_norm)
         return _busqueda_cache[cache_key]
 
     # 2. Circuit breaker — si la API de esta empresa está fallando, cortar rápido
     if _is_circuit_open(id_empresa):
+        SEARCH_CACHE.labels(result="circuit_open").inc()
         logger.warning(
             "[BUSQUEDA] Circuit ABIERTO id_empresa=%s — búsqueda rechazada sin llamar API",
             id_empresa,
@@ -165,6 +169,9 @@ async def buscar_productos_servicios(
             "productos": [],
             "error": "El servicio de búsqueda no está disponible temporalmente. Intenta en unos minutos.",
         }
+
+    # 3. Cache miss — se va a la red
+    SEARCH_CACHE.labels(result="miss").inc()
 
     payload = {
         "codOpe": COD_OPE,
@@ -183,7 +190,7 @@ async def buscar_productos_servicios(
         json.dumps(payload, ensure_ascii=False),
     )
 
-    # 3. Retry loop: 1 reintento con backoff 0.5s
+    # Retry loop: 1 reintento con backoff 0.5s
     # Solo se reintenta en fallos de red/timeout (excepciones), no en success:false
     # de la API (eso es respuesta válida del negocio, no error transitorio).
     max_retries = 2

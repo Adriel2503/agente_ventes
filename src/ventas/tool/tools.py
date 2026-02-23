@@ -8,8 +8,10 @@ import logging
 from langchain.tools import tool, ToolRuntime
 
 try:
+    from ..metrics import TOOL_CALLS
     from ..services.busqueda_productos import buscar_productos_servicios, format_productos_para_respuesta
 except ImportError:
+    from ventas.metrics import TOOL_CALLS
     from ventas.services.busqueda_productos import buscar_productos_servicios, format_productos_para_respuesta
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ async def search_productos_servicios(
         return "No tengo el contexto de empresa para buscar productos; no puedo mostrar el catálogo en este momento."
     id_empresa = ctx.id_empresa
 
+    _tool_status = "ok"
     try:
         result = await buscar_productos_servicios(
             id_empresa=id_empresa,
@@ -61,6 +64,7 @@ async def search_productos_servicios(
         return "\n".join(lineas)
 
     except Exception as e:
+        _tool_status = "error"
         logger.error(
             "[TOOL] search_productos_servicios - %s: %s (busqueda=%r, id_empresa=%s)",
             type(e).__name__,
@@ -70,6 +74,9 @@ async def search_productos_servicios(
             exc_info=True,
         )
         return f"Error al buscar: {str(e)}. Intenta de nuevo."
+
+    finally:
+        TOOL_CALLS.labels(tool="search_productos_servicios", status=_tool_status).inc()
 
 
 AGENT_TOOLS = [search_productos_servicios]

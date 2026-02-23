@@ -7,6 +7,7 @@ Consumido directamente por el gateway; sin protocolo MCP.
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -19,13 +20,13 @@ try:
     from . import config as app_config
     from .agent import process_venta_message
     from .logger import setup_logging, get_logger
-    from .metrics import initialize_agent_info
+    from .metrics import initialize_agent_info, HTTP_REQUESTS, HTTP_DURATION
     from .services.api_informacion import close_http_client
 except ImportError:
     from ventas import config as app_config
     from ventas.agent import process_venta_message
     from ventas.logger import setup_logging, get_logger
-    from ventas.metrics import initialize_agent_info
+    from ventas.metrics import initialize_agent_info, HTTP_REQUESTS, HTTP_DURATION
     from ventas.services.api_informacion import close_http_client
 
 # Configurar logging antes de cualquier otra cosa
@@ -120,6 +121,9 @@ async def chat(req: ChatRequest) -> ChatResponse:
     logger.debug("[HTTP] Message: %s...", req.message[:100])
     logger.debug("[HTTP] Context keys: %s", list(context.keys()))
 
+    _start = time.perf_counter()
+    _http_status = "success"
+
     try:
         reply = await asyncio.wait_for(
             process_venta_message(
@@ -135,22 +139,31 @@ async def chat(req: ChatRequest) -> ChatResponse:
         return ChatResponse(reply=reply, url=None)
 
     except asyncio.TimeoutError:
+        _http_status = "timeout"
         error_msg = f"La solicitud tardó más de {app_config.CHAT_TIMEOUT}s. Por favor, intenta de nuevo."
         logger.error("[HTTP] Timeout en process_venta_message (CHAT_TIMEOUT=%s)", app_config.CHAT_TIMEOUT)
         return ChatResponse(reply=error_msg, url=None)
 
     except ValueError as e:
+        _http_status = "error"
         error_msg = f"Error de configuración: {str(e)}"
         logger.error("[HTTP] %s", error_msg)
         return ChatResponse(reply=error_msg, url=None)
 
     except asyncio.CancelledError:
+        _http_status = None  # No contar requests abortados externamente
         raise
 
     except Exception as e:
+        _http_status = "error"
         error_msg = f"Error procesando mensaje: {str(e)}"
         logger.error("[HTTP] %s", error_msg, exc_info=True)
         return ChatResponse(reply=error_msg, url=None)
+
+    finally:
+        if _http_status is not None:
+            HTTP_REQUESTS.labels(status=_http_status).inc()
+            HTTP_DURATION.observe(time.perf_counter() - _start)
 
 
 # ---------------------------------------------------------------------------

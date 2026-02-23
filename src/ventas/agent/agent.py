@@ -13,6 +13,7 @@ Diseño de cache:
 
 import asyncio
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,11 +26,13 @@ try:
     from .. import config as app_config
     from ..tool.tools import AGENT_TOOLS
     from ..logger import get_logger
+    from ..metrics import AGENT_CACHE, LLM_REQUESTS, LLM_DURATION
     from ..prompts import build_ventas_system_prompt
 except ImportError:
     from ventas import config as app_config
     from ventas.tool.tools import AGENT_TOOLS
     from ventas.logger import get_logger
+    from ventas.metrics import AGENT_CACHE, LLM_REQUESTS, LLM_DURATION
     from ventas.prompts import build_ventas_system_prompt
 
 logger = get_logger(__name__)
@@ -132,6 +135,7 @@ async def _get_agent(config: dict[str, Any]):
 
     # Fast path
     if id_empresa in _agent_cache:
+        AGENT_CACHE.labels(result="hit").inc()
         logger.debug("[AGENT] Cache HIT id_empresa=%s", id_empresa)
         return _agent_cache[id_empresa]
 
@@ -141,6 +145,7 @@ async def _get_agent(config: dict[str, Any]):
         return await asyncio.shield(_building[id_empresa])
 
     # Iniciar build y registrar el Task para que otros puedan unirse
+    AGENT_CACHE.labels(result="miss").inc()
     logger.info("[AGENT] Cache MISS id_empresa=%s — iniciando build", id_empresa)
     task = asyncio.create_task(_build_agent_for_empresa(id_empresa, config))
     _building[id_empresa] = task
@@ -239,6 +244,9 @@ async def process_venta_message(
     agent_context = _prepare_agent_context(context, session_id)
     langgraph_config = {"configurable": {"thread_id": str(session_id)}}
 
+    _llm_start = time.perf_counter()
+    _llm_status = "success"
+
     try:
         logger.debug("[AGENT] Invocando agente — session=%s, empresa=%s", session_id, config_data.get("id_empresa"))
 
@@ -262,7 +270,12 @@ async def process_venta_message(
         logger.debug("[AGENT] Respuesta generada: %s...", response_text[:200])
 
     except Exception as e:
+        _llm_status = "error"
         logger.error("[AGENT] Error ejecutando agente session=%s: %s", session_id, e, exc_info=True)
         return "Disculpa, tuve un problema al procesar tu mensaje. ¿Podrías intentar nuevamente?"
+
+    finally:
+        LLM_REQUESTS.labels(status=_llm_status).inc()
+        LLM_DURATION.observe(time.perf_counter() - _llm_start)
 
     return response_text
