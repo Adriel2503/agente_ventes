@@ -6,6 +6,8 @@ Usa codOpe: OBTENER_SUCURSALES_PUBLICAS. Para inyectar en el system prompt (reco
 import logging
 from typing import Any
 
+from cachetools import TTLCache
+
 try:
     from ..services.api_informacion import post_informacion
 except ImportError:
@@ -15,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 COD_OPE = "OBTENER_SUCURSALES_PUBLICAS"
 MAX_SUCURSALES = 5
+
+# Cache TTL 1h (mismo criterio que contexto_negocio y preguntas_frecuentes)
+_sucursales_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)
 
 
 def _norm(s: str | None) -> str:
@@ -109,6 +114,7 @@ async def obtener_sucursales(id_empresa: int) -> str:
     """
     Obtiene sucursales de la API (OBTENER_SUCURSALES_PUBLICAS) y devuelve texto
     formateado para inyectar en el system prompt (recojo en tienda).
+    Incluye cache TTL 1h para evitar llamadas repetidas durante la vida del agente.
 
     Args:
         id_empresa: ID de la empresa
@@ -117,23 +123,30 @@ async def obtener_sucursales(id_empresa: int) -> str:
         Texto formateado (nombre, dirección, horario compacto por sucursal)
         o string vacío si falla/vacío.
     """
+    if id_empresa in _sucursales_cache:
+        logger.debug("[SUCURSALES] Cache HIT id_empresa=%s", id_empresa)
+        return _sucursales_cache[id_empresa]
+
     payload = {"codOpe": COD_OPE, "id_empresa": id_empresa}
 
     try:
         data = await post_informacion(payload)
     except Exception as e:
-        logger.warning("[SUCURSALES] Error al obtener sucursales: %s", e)
+        logger.warning("[SUCURSALES] Error al obtener sucursales id_empresa=%s: %s", id_empresa, e)
         return ""
 
     if not data.get("success"):
-        logger.warning("[SUCURSALES] API no success: %s", data.get("error") or data.get("message"))
+        logger.warning("[SUCURSALES] API no success id_empresa=%s: %s", id_empresa, data.get("error") or data.get("message"))
         return ""
 
     sucursales = data.get("sucursales", [])
     if not sucursales:
         return ""
 
-    return format_sucursales_para_prompt(sucursales)
+    resultado = format_sucursales_para_prompt(sucursales)
+    _sucursales_cache[id_empresa] = resultado
+    logger.debug("[SUCURSALES] Cache SET id_empresa=%s (%s sucursales)", id_empresa, len(sucursales))
+    return resultado
 
 
 __all__ = ["obtener_sucursales", "format_sucursales_para_prompt", "format_horario_compacto"]

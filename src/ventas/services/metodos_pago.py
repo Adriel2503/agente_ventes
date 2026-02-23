@@ -6,6 +6,8 @@ Usa codOpe: OBTENER_METODOS_PAGO. Para inyectar en el system prompt (medios de p
 import logging
 from typing import Any
 
+from cachetools import TTLCache
+
 try:
     from ..services.api_informacion import post_informacion
 except ImportError:
@@ -14,6 +16,9 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 COD_OPE = "OBTENER_METODOS_PAGO"
+
+# Cache TTL 1h (mismo criterio que contexto_negocio y preguntas_frecuentes)
+_metodos_pago_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)
 
 
 def _norm(s: Any) -> str:
@@ -77,6 +82,7 @@ async def obtener_metodos_pago(id_empresa: int) -> str:
     """
     Obtiene métodos de pago de la API (OBTENER_METODOS_PAGO) y devuelve texto
     formateado para inyectar en el system prompt.
+    Incluye cache TTL 1h para evitar llamadas repetidas durante la vida del agente.
 
     Args:
         id_empresa: ID de la empresa
@@ -84,18 +90,22 @@ async def obtener_metodos_pago(id_empresa: int) -> str:
     Returns:
         Texto formateado (Bancos + Billeteras digitales) o string vacío si falla.
     """
+    if id_empresa in _metodos_pago_cache:
+        logger.debug("[METODOS_PAGO] Cache HIT id_empresa=%s", id_empresa)
+        return _metodos_pago_cache[id_empresa]
+
     payload = {"codOpe": COD_OPE, "id_empresa": id_empresa}
 
     try:
         data = await post_informacion(payload)
     except Exception as e:
-        logger.warning("[METODOS_PAGO] Error al obtener métodos de pago: %s", e)
+        logger.warning("[METODOS_PAGO] Error al obtener métodos de pago id_empresa=%s: %s", id_empresa, e)
         return ""
 
     if not data.get("success"):
         logger.warning(
-            "[METODOS_PAGO] API no success: %s",
-            data.get("error") or data.get("message"),
+            "[METODOS_PAGO] API no success id_empresa=%s: %s",
+            id_empresa, data.get("error") or data.get("message"),
         )
         return ""
 
@@ -103,7 +113,10 @@ async def obtener_metodos_pago(id_empresa: int) -> str:
     if not metodos_pago or not isinstance(metodos_pago, dict):
         return ""
 
-    return _format_metodos_pago_para_prompt(metodos_pago)
+    resultado = _format_metodos_pago_para_prompt(metodos_pago)
+    _metodos_pago_cache[id_empresa] = resultado
+    logger.debug("[METODOS_PAGO] Cache SET id_empresa=%s", id_empresa)
+    return resultado
 
 
 __all__ = ["obtener_metodos_pago", "_format_metodos_pago_para_prompt"]

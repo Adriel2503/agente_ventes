@@ -7,6 +7,8 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
+from cachetools import TTLCache
+
 try:
     from ..services.api_informacion import post_informacion
 except ImportError:
@@ -16,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 COD_OPE = "OBTENER_CATEGORIAS"
 MAX_ITEMS = 15
+
+# Cache TTL 1h (mismo criterio que contexto_negocio y preguntas_frecuentes)
+_categorias_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)
 
 
 def _clean_text(text: Optional[str], max_chars: int = 200) -> str:
@@ -50,10 +55,17 @@ def format_categorias_para_prompt(categorias: List[Dict[str, Any]]) -> str:
     return "\n".join(lineas)
 
 
+_DEFAULT_MSG = (
+    "No hay información de productos y servicios cargada. "
+    "Usa la herramienta search_productos_servicios cuando pregunten por algo concreto."
+)
+
+
 async def obtener_categorias(id_empresa: int) -> str:
     """
     Obtiene categorías de la API (OBTENER_CATEGORIAS) y devuelve texto formateado
     para inyectar en el system prompt como información de productos y servicios.
+    Incluye cache TTL 1h para evitar llamadas repetidas durante la vida del agente.
 
     Args:
         id_empresa: ID de la empresa
@@ -61,23 +73,30 @@ async def obtener_categorias(id_empresa: int) -> str:
     Returns:
         Texto formateado (nombre + descripción por ítem) o mensaje por defecto si falla/vacío.
     """
+    if id_empresa in _categorias_cache:
+        logger.debug("[CATEGORIAS] Cache HIT id_empresa=%s", id_empresa)
+        return _categorias_cache[id_empresa]
+
     payload = {"codOpe": COD_OPE, "id_empresa": id_empresa}
 
     try:
         data = await post_informacion(payload)
     except Exception as e:
-        logger.warning("[CATEGORIAS] Error al obtener categorías: %s", e)
-        return "No hay información de productos y servicios cargada. Usa la herramienta search_productos_servicios cuando pregunten por algo concreto."
+        logger.warning("[CATEGORIAS] Error al obtener categorías id_empresa=%s: %s", id_empresa, e)
+        return _DEFAULT_MSG
 
     if not data.get("success"):
-        logger.warning("[CATEGORIAS] API no success: %s", data.get("error") or data.get("message"))
-        return "No hay información de productos y servicios cargada. Usa la herramienta search_productos_servicios cuando pregunten por algo concreto."
+        logger.warning("[CATEGORIAS] API no success id_empresa=%s: %s", id_empresa, data.get("error") or data.get("message"))
+        return _DEFAULT_MSG
 
     categorias = data.get("categorias", [])
     if not categorias:
-        return "No hay información de productos y servicios cargada. Usa la herramienta search_productos_servicios cuando pregunten por algo concreto."
+        return _DEFAULT_MSG
 
-    return format_categorias_para_prompt(categorias)
+    resultado = format_categorias_para_prompt(categorias)
+    _categorias_cache[id_empresa] = resultado
+    logger.debug("[CATEGORIAS] Cache SET id_empresa=%s (%s categorías)", id_empresa, len(categorias))
+    return resultado
 
 
 __all__ = ["obtener_categorias", "format_categorias_para_prompt"]

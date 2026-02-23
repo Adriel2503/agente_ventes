@@ -26,6 +26,15 @@ logger = logging.getLogger(__name__)
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent
 
+# Jinja2 env y template como singletons de módulo.
+# Environment compila y cachea templates internamente; crearlo por request
+# descarta ese cache y re-lee disco en cada llamada.
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(_TEMPLATES_DIR)),
+    autoescape=select_autoescape(disabled_extensions=()),
+)
+_template = _jinja_env.get_template("ventas_system.j2")
+
 _DEFAULTS: Dict[str, Any] = {
     "personalidad": "amable, profesional y cercano",
     "nombre_asistente": "asistente comercial",
@@ -54,11 +63,6 @@ async def build_ventas_system_prompt(config: Dict[str, Any]) -> str:
     Returns:
         System prompt formateado.
     """
-    env = Environment(
-        loader=FileSystemLoader(str(_TEMPLATES_DIR)),
-        autoescape=select_autoescape(disabled_extensions=()),
-    )
-    template = env.get_template("ventas_system.j2")
     variables = _apply_defaults(config)
 
     # Compatibilidad con mismo payload que citas: nombre_bot → nombre_negocio si no viene nombre_negocio
@@ -116,7 +120,7 @@ async def build_ventas_system_prompt(config: Dict[str, Any]) -> str:
         variables["preguntas_frecuentes"] = preguntas_frecuentes_str or ""
         # medios_pago queda con el default de _apply_defaults (vacío) o el que venga en config
 
-    return template.render(**variables)
+    return _template.render(**variables)
 
 
 __all__ = ["build_ventas_system_prompt"]
