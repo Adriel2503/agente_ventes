@@ -6,7 +6,6 @@ Configura logging consistente en toda la aplicación.
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 # Niveles de log
 DEBUG = logging.DEBUG
@@ -18,8 +17,8 @@ CRITICAL = logging.CRITICAL
 
 def setup_logging(
     level: int = logging.INFO,
-    log_file: Optional[str] = None,
-    log_format: Optional[str] = None
+    log_file: str | None = None,
+    log_format: str | None = None,
 ) -> None:
     """
     Configura el sistema de logging para toda la aplicación.

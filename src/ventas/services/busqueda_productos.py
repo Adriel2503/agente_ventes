@@ -13,7 +13,7 @@ import asyncio
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from cachetools import TTLCache
 
@@ -68,7 +68,7 @@ def _reset_failures(id_empresa: int) -> None:
 # Formateo de resultados
 # ---------------------------------------------------------------------------
 
-def _clean_description(desc: Optional[str], max_chars: int = 120) -> str:
+def _clean_description(desc: str | None, max_chars: int = 120) -> str:
     """Limpia HTML y trunca la descripción."""
     if not desc or not str(desc).strip():
         return "-"
@@ -88,7 +88,7 @@ def _format_precio(precio: Any) -> str:
         return "-"
 
 
-def _format_item(p: Dict[str, Any]) -> List[str]:
+def _format_item(p: dict[str, Any]) -> list[str]:
     nombre = (p.get("nombre") or "-").strip()
     precio_str = _format_precio(p.get("precio_unitario"))
     categoria = (p.get("nombre_categoria") or "-").strip()
@@ -108,7 +108,7 @@ def _format_item(p: Dict[str, Any]) -> List[str]:
     return lineas
 
 
-def format_productos_para_respuesta(productos: List[Dict[str, Any]]) -> str:
+def format_productos_para_respuesta(productos: list[dict[str, Any]]) -> str:
     """Formatea la lista de productos/servicios para la respuesta de la tool."""
     if not productos:
         return "No se encontraron resultados."
@@ -127,7 +127,7 @@ async def buscar_productos_servicios(
     busqueda: str,
     limite: int = 10,
     log_search_apis: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Busca productos y servicios por término (ventas directas).
 

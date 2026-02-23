@@ -5,7 +5,6 @@ Incluye validación de tipos/valores y anotaciones para IDE y documentación.
 
 import os
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -41,8 +40,8 @@ def _get_str(key: str, default: str) -> str:
 def _get_int(
     key: str,
     default: int,
-    min_val: Optional[int] = None,
-    max_val: Optional[int] = None,
+    min_val: int | None = None,
+    max_val: int | None = None,
 ) -> int:
     """Obtiene variable de entorno como int; valida y usa default si es inválida."""
     raw = os.getenv(key, str(default))
@@ -60,8 +59,8 @@ def _get_int(
 def _get_float(
     key: str,
     default: float,
-    min_val: Optional[float] = None,
-    max_val: Optional[float] = None,
+    min_val: float | None = None,
+    max_val: float | None = None,
 ) -> float:
     """Obtiene variable de entorno como float; valida y usa default si es inválida."""
     raw = os.getenv(key, str(default))

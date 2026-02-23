@@ -6,7 +6,7 @@ Mismo patrón que agent_citas: cache TTL + circuit breaker + retry con backoff.
 
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from cachetools import TTLCache
 
@@ -31,7 +31,7 @@ def _is_contexto_circuit_open(id_empresa: Any) -> bool:
     return failure_count >= _contexto_failure_threshold
 
 
-async def fetch_contexto_negocio(id_empresa: Optional[Any]) -> Optional[str]:
+async def fetch_contexto_negocio(id_empresa: Any | None) -> str | None:
     """
     Obtiene el contexto de negocio desde la API para inyectar en el system prompt.
     Incluye cache TTL (1 h), circuit breaker (3 fallos -> abierto 5 min) y retry con backoff.

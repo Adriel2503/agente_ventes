@@ -8,7 +8,7 @@ Consumido directamente por el gateway; sin protocolo MCP.
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Dict
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
@@ -48,7 +48,7 @@ initialize_agent_info(model=app_config.OPENAI_MODEL, version="2.0.0")
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4096)
     session_id: int
-    context: Dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
 
 
 class ChatResponse(BaseModel):

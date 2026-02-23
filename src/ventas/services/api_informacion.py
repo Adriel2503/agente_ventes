@@ -5,7 +5,7 @@ Helper compartido para categorías, sucursales y búsqueda de productos.
 
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -16,7 +16,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-_client: Optional[httpx.AsyncClient] = None
+_client: httpx.AsyncClient | None = None
 
 
 def get_client() -> httpx.AsyncClient:
@@ -35,7 +35,7 @@ async def close_http_client() -> None:
         _client = None
 
 
-async def post_informacion(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def post_informacion(payload: dict[str, Any]) -> dict[str, Any]:
     """
     POST a ws_informacion_ia.php.
 
@@ -79,4 +79,4 @@ async def post_informacion(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise
 
 
-__all__ = ["post_informacion", "close_http_client"]
+__all__ = ["post_informacion", "close_http_client", "get_client"]

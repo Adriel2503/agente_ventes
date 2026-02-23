@@ -5,7 +5,7 @@ Usa codOpe: OBTENER_CATEGORIAS. Para inyectar en el system prompt (información 
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from cachetools import TTLCache
 
@@ -23,7 +23,7 @@ MAX_ITEMS = 15
 _categorias_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)
 
 
-def _clean_text(text: Optional[str], max_chars: int = 200) -> str:
+def _clean_text(text: str | None, max_chars: int = 200) -> str:
     if not text or not str(text).strip():
         return ""
     s = str(text).strip()
@@ -33,7 +33,7 @@ def _clean_text(text: Optional[str], max_chars: int = 200) -> str:
     return (s[:max_chars] + "...") if len(s) > max_chars else s
 
 
-def format_categorias_para_prompt(categorias: List[Dict[str, Any]]) -> str:
+def format_categorias_para_prompt(categorias: list[dict[str, Any]]) -> str:
     """
     Formatea la lista de categorías para inyectar en el system prompt.
     Salida: "1) Nombre: descripcion. (N productos)\n2) ..."

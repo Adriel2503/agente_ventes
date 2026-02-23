@@ -13,8 +13,8 @@ Diseño de cache:
 
 import asyncio
 import re
-from typing import Any, Dict, List, Union
 from dataclasses import dataclass
+from typing import Any
 
 from cachetools import TTLCache
 from langchain.agents import create_agent
@@ -52,7 +52,7 @@ _agent_cache: TTLCache = TTLCache(
 )
 
 # Tasks en vuelo por empresa (anti-thundering herd).
-_building: Dict[int, asyncio.Task] = {}
+_building: dict[int, asyncio.Task] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ class AgentContext:
 # Helpers internos
 # ---------------------------------------------------------------------------
 
-def _validate_context(context: Dict[str, Any]) -> None:
+def _validate_context(context: dict[str, Any]) -> None:
     config_data = context.get("config", {})
     required_keys = ["id_empresa"]
     missing = [k for k in required_keys if k not in config_data or config_data[k] is None]
@@ -97,7 +97,7 @@ def _get_model():
     return _model
 
 
-async def _build_agent_for_empresa(id_empresa: int, config: Dict[str, Any]):
+async def _build_agent_for_empresa(id_empresa: int, config: dict[str, Any]):
     """
     Construye un nuevo agente para la empresa. Se llama SOLO en cache miss.
     El agente resultante es compartido por todos los usuarios de esa empresa;
@@ -119,7 +119,7 @@ async def _build_agent_for_empresa(id_empresa: int, config: Dict[str, Any]):
     return agent
 
 
-async def _get_agent(config: Dict[str, Any]):
+async def _get_agent(config: dict[str, Any]):
     """
     Retorna el agente para esta empresa.
 
@@ -153,7 +153,7 @@ async def _get_agent(config: Dict[str, Any]):
         _building.pop(id_empresa, None)
 
 
-def _prepare_agent_context(context: Dict[str, Any], session_id: int) -> AgentContext:
+def _prepare_agent_context(context: dict[str, Any], session_id: int) -> AgentContext:
     config_data = context.get("config", {})
     return AgentContext(
         id_empresa=config_data["id_empresa"],
@@ -172,7 +172,7 @@ _IMAGE_URL_RE = re.compile(
 _MAX_IMAGES = 10  # límite de OpenAI Vision
 
 
-def _build_content(message: str) -> Union[str, List[dict]]:
+def _build_content(message: str) -> str | list[dict]:
     """
     Devuelve string si no hay URLs de imagen (Caso 1),
     o lista de bloques OpenAI Vision si las hay (Casos 2-5).
@@ -184,7 +184,7 @@ def _build_content(message: str) -> Union[str, List[dict]]:
     urls = urls[:_MAX_IMAGES]
     text = _IMAGE_URL_RE.sub("", message).strip()
 
-    blocks: List[dict] = []
+    blocks: list[dict] = []
     if text:
         blocks.append({"type": "text", "text": text})
     for url in urls:
@@ -199,7 +199,7 @@ def _build_content(message: str) -> Union[str, List[dict]]:
 async def process_venta_message(
     message: str,
     session_id: int,
-    context: Dict[str, Any],
+    context: dict[str, Any],
 ) -> str:
     """
     Procesa un mensaje del cliente sobre ventas usando el agente LangChain.

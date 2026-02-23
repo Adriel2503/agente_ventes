@@ -4,7 +4,7 @@ Prompts del agente de ventas. Builder del system prompt.
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -36,7 +36,7 @@ _jinja_env = Environment(
 )
 _template = _jinja_env.get_template("ventas_system.j2")
 
-_DEFAULTS: Dict[str, Any] = {
+_DEFAULTS: dict[str, Any] = {
     "personalidad": "amable, profesional y cercano",
     "nombre_asistente": "asistente comercial",
     "nombre_negocio": "la empresa",
@@ -45,7 +45,7 @@ _DEFAULTS: Dict[str, Any] = {
 }
 
 
-def _apply_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
+def _apply_defaults(config: dict[str, Any]) -> dict[str, Any]:
     out = dict(_DEFAULTS)
     for k, v in config.items():
         if v is not None and v != "" and v != []:
@@ -53,7 +53,7 @@ def _apply_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-async def build_ventas_system_prompt(config: Dict[str, Any]) -> str:
+async def build_ventas_system_prompt(config: dict[str, Any]) -> str:
     """
     Construye el system prompt del agente de ventas.
 
