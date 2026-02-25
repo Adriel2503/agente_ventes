@@ -14,6 +14,9 @@ from .config import (
     SERVER_PORT,
     LOG_LEVEL,
     LOG_FILE,
+    HTTP_RETRY_ATTEMPTS,
+    HTTP_RETRY_WAIT_MIN,
+    HTTP_RETRY_WAIT_MAX,
 )
 
 __all__ = [
@@ -32,4 +35,7 @@ __all__ = [
     "SERVER_PORT",
     "LOG_LEVEL",
     "LOG_FILE",
+    "HTTP_RETRY_ATTEMPTS",
+    "HTTP_RETRY_WAIT_MIN",
+    "HTTP_RETRY_WAIT_MAX",
 ]
