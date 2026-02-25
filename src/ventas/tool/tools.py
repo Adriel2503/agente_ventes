@@ -4,15 +4,18 @@ Versión mínima: búsqueda de productos/servicios (BUSCAR_PRODUCTOS_SERVICIOS_V
 """
 
 import logging
+from typing import Any
 
 from langchain.tools import tool, ToolRuntime
 
 try:
     from ..metrics import TOOL_CALLS
     from ..services.busqueda_productos import buscar_productos_servicios, format_productos_para_respuesta
+    from ..services.registrar_pedido import registrar_pedido as _svc_registrar_pedido
 except ImportError:
     from ventas.metrics import TOOL_CALLS
     from ventas.services.busqueda_productos import buscar_productos_servicios, format_productos_para_respuesta
+    from ventas.services.registrar_pedido import registrar_pedido as _svc_registrar_pedido
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +79,128 @@ async def search_productos_servicios(
         TOOL_CALLS.labels(tool="search_productos_servicios", status=_tool_status).inc()
 
 
-AGENT_TOOLS = [search_productos_servicios]
+@tool
+async def registrar_pedido(
+    productos: list[dict[str, Any]],
+    operacion: str,
+    modalidad: str,
+    tipo_envio: str,
+    nombre: str,
+    dni: str,
+    celular: str,
+    medio_pago: str,
+    monto_pagado: float,
+    direccion: str = "",
+    costo_envio: float = 0,
+    observacion: str = "",
+    fecha_entrega_estimada: str = "",
+    email: str = "",
+    sucursal: str = "",
+    runtime: ToolRuntime = None,
+) -> str:
+    """
+    Registra el pedido del cliente en el sistema una vez confirmado.
 
-__all__ = ["search_productos_servicios", "AGENT_TOOLS"]
+    Úsala SOLO cuando el cliente haya confirmado el pedido Y tengas todos los datos
+    obligatorios: productos elegidos, número de operación del comprobante, datos del
+    cliente (nombre, DNI, celular) y datos de entrega o recojo.
+
+    Campos clave:
+    - productos: lista de objetos con "id_catalogo" (el ID devuelto por
+      search_productos_servicios) y "cantidad". Ejemplo:
+      [{"id_catalogo": 3344, "cantidad": 2}]
+    - operacion: número/código de transacción leído de la imagen del comprobante
+      (Yape, BCP, transferencia, etc.).
+    - modalidad: "Delivery" si el cliente quiere envío a domicilio, "Recojo" si retira
+      en tienda.
+    - tipo_envio: tipo de envío acordado según las zonas del negocio (ej. "Delivery",
+      "Recojo", "rapidito"). Si es recojo en tienda puedes usar "Recojo".
+    - direccion: dirección completa de entrega. Vacío si es recojo en sucursal.
+    - costo_envio: monto numérico del costo de envío (0 si recojo).
+    - sucursal: nombre de la sucursal de recojo. Vacío si es delivery.
+    - nombre, dni, celular: datos del cliente (obligatorios).
+    - email: correo del cliente (opcional).
+    - medio_pago: medio con el que pagó (ej. "yape", "transferencia").
+    - monto_pagado: monto total pagado.
+    - fecha_entrega_estimada: fecha estimada de entrega en formato "YYYY-MM-DD"
+      (usa la información del sistema de envíos del negocio).
+    - observacion: notas adicionales (opcional).
+
+    IMPORTANTE: No inventes IDs de producto. El id_catalogo debe ser el ID que apareció
+    en la respuesta de search_productos_servicios. Si no tienes algún dato obligatorio,
+    pídelo al cliente antes de llamar esta herramienta.
+
+    Args:
+        productos:              Lista de {"id_catalogo": int, "cantidad": int}.
+        operacion:              Número de operación del comprobante.
+        modalidad:              "Delivery" o "Recojo".
+        tipo_envio:             Tipo de envío (ej. "Delivery", "Recojo").
+        nombre:                 Nombre completo del cliente.
+        dni:                    DNI del cliente.
+        celular:                Teléfono del cliente.
+        medio_pago:             Medio de pago (ej. "yape").
+        monto_pagado:           Monto pagado.
+        direccion:              Dirección de entrega (vacío si recojo).
+        costo_envio:            Costo de envío (0 si recojo).
+        observacion:            Nota adicional (opcional).
+        fecha_entrega_estimada: Fecha estimada de entrega "YYYY-MM-DD" (opcional).
+        email:                  Correo del cliente (opcional).
+        sucursal:               Sucursal de recojo (vacío si delivery).
+        runtime:                Contexto automático inyectado por LangChain.
+
+    Returns:
+        Mensaje de éxito con número de pedido, o mensaje de error.
+    """
+    logger.debug(
+        "[TOOL] registrar_pedido - modalidad=%s productos=%s operacion=%s",
+        modalidad, productos, operacion,
+    )
+
+    ctx = runtime.context if runtime else None
+    if not ctx or getattr(ctx, "id_empresa", None) is None:
+        logger.warning("[TOOL] registrar_pedido - llamada sin contexto de empresa")
+        return "No tengo el contexto de empresa; no puedo registrar el pedido en este momento."
+
+    id_empresa = ctx.id_empresa
+    id_prospecto = getattr(ctx, "session_id", 0)
+
+    _tool_status = "ok"
+    try:
+        return await _svc_registrar_pedido(
+            id_empresa=id_empresa,
+            id_prospecto=id_prospecto,
+            productos=productos,
+            operacion=operacion,
+            modalidad=modalidad,
+            tipo_envio=tipo_envio,
+            nombre=nombre,
+            dni=dni,
+            celular=celular,
+            medio_pago=medio_pago,
+            monto_pagado=monto_pagado,
+            direccion=direccion,
+            costo_envio=costo_envio,
+            observacion=observacion,
+            fecha_entrega_estimada=fecha_entrega_estimada,
+            email=email,
+            sucursal=sucursal,
+        )
+    except Exception as e:
+        _tool_status = "error"
+        logger.error(
+            "[TOOL] registrar_pedido - %s: %s (id_empresa=%s, operacion=%r)",
+            type(e).__name__,
+            e,
+            id_empresa,
+            operacion,
+            exc_info=True,
+        )
+        return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
+
+    finally:
+        TOOL_CALLS.labels(tool="registrar_pedido", status=_tool_status).inc()
+
+
+AGENT_TOOLS = [search_productos_servicios, registrar_pedido]
+
+__all__ = ["search_productos_servicios", "registrar_pedido", "AGENT_TOOLS"]
