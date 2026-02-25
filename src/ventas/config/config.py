@@ -135,10 +135,10 @@ API_PREGUNTAS_FRECUENTES_URL: str = _get_str(
 
 
 # ---------------------------------------------------------------------------
-# Cache del agente (TTL en segundos; maxsize = número máximo de empresas)
+# Cache del agente (TTL en minutos; maxsize = número máximo de empresas)
 # ---------------------------------------------------------------------------
 
-AGENT_CACHE_TTL: int = _get_int("AGENT_CACHE_TTL", 3600, min_val=300, max_val=86400)
+AGENT_CACHE_TTL_MINUTES: int = _get_int("AGENT_CACHE_TTL_MINUTES", 60, min_val=5, max_val=1440)
 AGENT_CACHE_MAXSIZE: int = _get_int("AGENT_CACHE_MAXSIZE", 500, min_val=10, max_val=5000)
 
 

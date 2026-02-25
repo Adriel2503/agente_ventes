@@ -5,7 +5,7 @@ Diseño de cache:
   - _model: singleton del cliente LLM, creado una sola vez al arrancar.
   - _agent_cache: TTLCache keyed by (id_empresa, personalidad). Un agente por
     combinación empresa+personalidad sirve a todos los usuarios usando distintos
-    thread_ids en el checkpointer (InMemorySaver). TTL configurable vía AGENT_CACHE_TTL.
+    thread_ids en el checkpointer (InMemorySaver). TTL configurable vía AGENT_CACHE_TTL_MINUTES.
   - _agent_cache_locks: Lock por cache_key para anti-thundering herd (patrón agent_citas).
     Si N requests llegan en cache miss simultáneo para la misma empresa,
     serializan via lock; solo el primero construye, los demás hacen double-check.
@@ -49,10 +49,10 @@ _checkpointer = InMemorySaver()
 _model = None
 
 # Cache de agentes: (id_empresa, personalidad) → instancia de agente.
-# Tamaño y TTL configurables sin redeployar (AGENT_CACHE_MAXSIZE, AGENT_CACHE_TTL).
+# Tamaño y TTL configurables sin redeployar (AGENT_CACHE_MAXSIZE, AGENT_CACHE_TTL_MINUTES).
 _agent_cache: TTLCache = TTLCache(
     maxsize=app_config.AGENT_CACHE_MAXSIZE,
-    ttl=app_config.AGENT_CACHE_TTL,
+    ttl=app_config.AGENT_CACHE_TTL_MINUTES * 60,
 )
 
 # Lock por cache_key para anti-thundering herd en construcción de agente.
@@ -152,8 +152,8 @@ async def _build_agent_for_empresa(id_empresa: int, config: dict[str, Any]):
         checkpointer=_checkpointer,
     )
     logger.info(
-        "[AGENT] Agente listo para id_empresa=%s (tools=%s, TTL=%ss)",
-        id_empresa, len(AGENT_TOOLS), app_config.AGENT_CACHE_TTL,
+        "[AGENT] Agente listo para id_empresa=%s (tools=%s, TTL=%s min)",
+        id_empresa, len(AGENT_TOOLS), app_config.AGENT_CACHE_TTL_MINUTES,
     )
     return agent
 
@@ -247,7 +247,7 @@ async def process_venta_message(
     """
     Procesa un mensaje del cliente sobre ventas usando el agente LangChain.
 
-    El agente se obtiene del cache por (id_empresa, personalidad) (TTL=AGENT_CACHE_TTL).
+    El agente se obtiene del cache por (id_empresa, personalidad) (TTL=AGENT_CACHE_TTL_MINUTES min).
     El historial de conversación se aísla por session_id via thread_id
     en el checkpointer (InMemorySaver). Los requests concurrentes del mismo
     session_id se serializan vía _session_locks para evitar race conditions.
