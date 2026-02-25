@@ -77,19 +77,17 @@ def _format_precio(precio: Any) -> str:
 
 def _format_item(p: dict[str, Any]) -> list[str]:
     nombre = (p.get("nombre") or "-").strip()
+    id_prod = p.get("id")
     precio_str = _format_precio(p.get("precio_unitario"))
     categoria = (p.get("nombre_categoria") or "-").strip()
     descripcion = _clean_description(p.get("descripcion"))
-    tipo = (p.get("nombre_tipo_producto") or "").strip().lower()
-    es_servicio = tipo == "servicio"
-    unidad = "sesión" if es_servicio else (
-        (p.get("nombre_unidad") or "unidad").strip().lower()
-    )
+    unidad = (p.get("nombre_unidad") or "unidad").strip().lower()
     lineas = [
         f"### {nombre}",
-        f"- **Precio:** {precio_str} por {unidad}",
-        f"- **Categoría:** {categoria}",
-        f"- **Descripción:** {descripcion}",
+        f"- ID: {id_prod if id_prod is not None else '-'}",
+        f"- Precio: {precio_str} por {unidad}",
+        f"- Categoría: {categoria}",
+        f"- Descripción: {descripcion}",
         "",
     ]
     return lineas
