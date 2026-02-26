@@ -1,6 +1,7 @@
 """
 Tools del agente de ventas.
-Versión mínima: búsqueda de productos/servicios (BUSCAR_PRODUCTOS_SERVICIOS_VENTAS_DIRECTAS).
+Incluye search_productos_servicios (búsqueda en catálogo vía BUSCAR_PRODUCTOS_SERVICIOS_VENTAS_DIRECTAS)
+y registrar_pedido (registro del pedido confirmado vía REGISTRAR_PEDIDO).
 """
 
 import logging

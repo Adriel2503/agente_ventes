@@ -1,5 +1,7 @@
 """
 Prompts del agente de ventas. Builder del system prompt.
+Usa Jinja2 y datos de las APIs MaravIA (categorías, sucursales, métodos de pago, contexto de negocio,
+FAQs, costos de envío) para construir el system prompt inyectado al LLM.
 """
 
 import asyncio

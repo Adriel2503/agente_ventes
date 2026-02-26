@@ -1,3 +1,5 @@
+"""Servicios del agente de ventas: HTTP, categorías, sucursales, búsqueda de productos, registro de pedido, contexto de negocio, métodos de pago, FAQs, costos de envío."""
+
 from .http_client import get_client, close_http_client
 from .busqueda_productos import buscar_productos_servicios, format_productos_para_respuesta
 from .categorias import obtener_categorias, format_categorias_para_prompt

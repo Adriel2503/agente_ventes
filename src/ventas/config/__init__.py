@@ -1,3 +1,5 @@
+"""Re-exporta la configuración del agente de ventas (env, timeouts, URLs de API MaravIA)."""
+
 from .config import (
     API_INFORMACION_URL,
     API_PREGUNTAS_FRECUENTES_URL,
