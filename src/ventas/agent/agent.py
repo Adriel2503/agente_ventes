@@ -3,9 +3,9 @@ Lógica del agente especializado en venta directa usando LangChain 1.2+ API mode
 
 Diseño de cache:
   - _model: singleton del cliente LLM, creado una sola vez al arrancar.
-  - _agent_cache: TTLCache keyed by (id_empresa, personalidad). Un agente por
-    combinación empresa+personalidad sirve a todos los usuarios usando distintos
-    thread_ids en el checkpointer (InMemorySaver). TTL configurable vía AGENT_CACHE_TTL_MINUTES.
+  - _agent_cache: TTLCache keyed by id_empresa. Un agente por empresa sirve a
+    todos los usuarios usando distintos thread_ids en el checkpointer
+    (InMemorySaver). TTL configurable vía AGENT_CACHE_TTL_MINUTES.
   - _agent_cache_locks: Lock por cache_key para anti-thundering herd (patrón agent_citas).
     Si N requests llegan en cache miss simultáneo para la misma empresa,
     serializan via lock; solo el primero construye, los demás hacen double-check.
@@ -57,7 +57,7 @@ _checkpointer = InMemorySaver()
 # init_chat_model es síncrono; no hay riesgo de race condition en asyncio.
 _model = None
 
-# Cache de agentes: (id_empresa, personalidad) → instancia de agente.
+# Cache de agentes: id_empresa → instancia de agente.
 # Tamaño y TTL configurables sin redeployar (AGENT_CACHE_MAXSIZE, AGENT_CACHE_TTL_MINUTES).
 _agent_cache: TTLCache = TTLCache(
     maxsize=app_config.AGENT_CACHE_MAXSIZE,
@@ -66,7 +66,7 @@ _agent_cache: TTLCache = TTLCache(
 
 # Lock por cache_key para anti-thundering herd en construcción de agente.
 # Limpiado en finally de _get_agent → no acumula entradas.
-_agent_cache_locks: dict[tuple, asyncio.Lock] = {}
+_agent_cache_locks: dict[int, asyncio.Lock] = {}
 _LOCKS_CLEANUP_THRESHOLD = 750  # 1.5x maxsize=500
 
 # Session locks: serializa requests concurrentes del mismo usuario en ainvoke.
@@ -89,7 +89,7 @@ class AgentContext:
 # Cleanup de locks obsoletos
 # ---------------------------------------------------------------------------
 
-def _cleanup_stale_agent_locks(current_cache_key: tuple) -> None:
+def _cleanup_stale_agent_locks(current_cache_key: int) -> None:
     """Elimina locks de agent_cache que ya no tienen entrada en el cache."""
     if len(_agent_cache_locks) < _LOCKS_CLEANUP_THRESHOLD:
         return
@@ -170,15 +170,15 @@ async def _build_agent_for_empresa(id_empresa: int, config: dict[str, Any]):
 
 async def _get_agent(config: dict[str, Any]):
     """
-    Retorna el agente para esta empresa+personalidad.
+    Retorna el agente para esta empresa.
 
     - Fast path (cache hit): O(1), sin I/O.
-    - Slow path (cache miss): Lock por (id_empresa, personalidad) + double-check post-lock.
+    - Slow path (cache miss): Lock por id_empresa + double-check post-lock.
       N requests concurrentes serializan; solo el primero construye.
       Mismo patrón que agent_citas.
     """
     id_empresa: int = config["id_empresa"]
-    cache_key = (id_empresa, config.get("personalidad", ""))
+    cache_key = id_empresa
 
     # Fast path — sin lock
     if cache_key in _agent_cache:
@@ -257,7 +257,7 @@ async def process_venta_message(
     """
     Procesa un mensaje del cliente sobre ventas usando el agente LangChain.
 
-    El agente se obtiene del cache por (id_empresa, personalidad) (TTL=AGENT_CACHE_TTL_MINUTES min).
+    El agente se obtiene del cache por id_empresa (TTL=AGENT_CACHE_TTL_MINUTES min).
     El historial de conversación se aísla por session_id via thread_id
     en el checkpointer (InMemorySaver). Los requests concurrentes del mismo
     session_id se serializan vía _session_locks para evitar race conditions.
@@ -265,7 +265,7 @@ async def process_venta_message(
     Args:
         message: Mensaje del cliente
         session_id: ID estable del usuario (viene del gateway)
-        context: Contexto con config (id_empresa, personalidad, nombre_negocio, etc.)
+        context: Contexto con config (id_empresa, nombre_negocio, personalidad, etc.)
 
     Returns:
         Tupla (reply, url). url es None cuando no hay medio que adjuntar.
