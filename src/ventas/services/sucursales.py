@@ -9,9 +9,9 @@ from cachetools import TTLCache
 
 try:
     from ..logger import get_logger
-    from ..services.http_client import post_informacion
-    from ..services._resilience import resilient_call
-    from ..services.circuit_breaker import informacion_cb
+    from .http_client import post_informacion
+    from ._resilience import resilient_call
+    from .circuit_breaker import informacion_cb
 except ImportError:
     from ventas.logger import get_logger
     from ventas.services.http_client import post_informacion

@@ -23,9 +23,9 @@ try:
     from .. import config as app_config
     from ..logger import get_logger
     from ..metrics import SEARCH_CACHE
-    from ..services.http_client import post_informacion
-    from ..services.circuit_breaker import informacion_cb
-    from ..services._resilience import resilient_call
+    from .http_client import post_informacion
+    from .circuit_breaker import informacion_cb
+    from ._resilience import resilient_call
 except ImportError:
     from ventas import config as app_config
     from ventas.logger import get_logger
