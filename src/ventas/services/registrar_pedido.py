@@ -14,17 +14,18 @@ Campos del payload:
                       dni, celular, email, medio_pago, sucursal, monto_pagado
 """
 
-import logging
 from typing import Any
 
 try:
     from .. import config as app_config
+    from ..logger import get_logger
     from ..services.http_client import get_client
 except ImportError:
     from ventas import config as app_config
+    from ventas.logger import get_logger
     from ventas.services.http_client import get_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 COD_OPE = "REGISTRAR_PEDIDO"
 ID_MONEDA_DEFAULT = 1

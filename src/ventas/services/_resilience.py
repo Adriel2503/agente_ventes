@@ -16,14 +16,18 @@ Uso:
     # Lanza RuntimeError si circuit abierto, o la excepción original si la llamada falla.
 """
 
-import logging
 from typing import Any, Awaitable, Callable
 
 import httpx
 
 from .circuit_breaker import CircuitBreaker
 
-logger = logging.getLogger(__name__)
+try:
+    from ..logger import get_logger
+except ImportError:
+    from ventas.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 async def resilient_call(

@@ -20,10 +20,12 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 try:
     from .. import config as app_config
+    from ..logger import get_logger
 except ImportError:
     from ventas import config as app_config
+    from ventas.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _client: httpx.AsyncClient | None = None
 

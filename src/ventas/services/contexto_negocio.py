@@ -5,21 +5,22 @@ Cache TTL + circuit breaker (vía resilient_call) + anti-thundering herd.
 """
 
 import asyncio
-import logging
 from typing import Any
 
 from cachetools import TTLCache
 
 try:
+    from ..logger import get_logger
     from .http_client import post_informacion
     from ._resilience import resilient_call
     from .circuit_breaker import informacion_cb
 except ImportError:
+    from ventas.logger import get_logger
     from ventas.services.http_client import post_informacion
     from ventas.services._resilience import resilient_call
     from ventas.services.circuit_breaker import informacion_cb
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache TTL: mismo criterio que citas (max 500 empresas, 1 hora)
 _contexto_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)

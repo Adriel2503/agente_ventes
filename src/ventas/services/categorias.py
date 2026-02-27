@@ -3,22 +3,23 @@ Categorías desde ws_informacion_ia.php.
 Usa codOpe: OBTENER_CATEGORIAS. Para inyectar en el system prompt (información de productos y servicios).
 """
 
-import logging
 import re
 from typing import Any
 
 from cachetools import TTLCache
 
 try:
+    from ..logger import get_logger
     from ..services.http_client import post_informacion
     from ..services._resilience import resilient_call
     from ..services.circuit_breaker import informacion_cb
 except ImportError:
+    from ventas.logger import get_logger
     from ventas.services.http_client import post_informacion
     from ventas.services._resilience import resilient_call
     from ventas.services.circuit_breaker import informacion_cb
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 COD_OPE = "OBTENER_CATEGORIAS"
 MAX_ITEMS = 15

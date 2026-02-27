@@ -149,3 +149,11 @@ AGENT_CACHE_MAXSIZE: int = _get_int("AGENT_CACHE_MAXSIZE", 500, min_val=10, max_
 HTTP_RETRY_ATTEMPTS: int = _get_int("HTTP_RETRY_ATTEMPTS", 3, min_val=1, max_val=10)
 HTTP_RETRY_WAIT_MIN: int = _get_int("HTTP_RETRY_WAIT_MIN", 1, min_val=0, max_val=30)
 HTTP_RETRY_WAIT_MAX: int = _get_int("HTTP_RETRY_WAIT_MAX", 4, min_val=1, max_val=60)
+
+
+# ---------------------------------------------------------------------------
+# Circuit breaker (threshold fallos → abierto; reset tras TTL segundos)
+# ---------------------------------------------------------------------------
+
+CB_THRESHOLD: int = _get_int("CB_THRESHOLD", 3, min_val=1, max_val=20)
+CB_RESET_TTL: int = _get_int("CB_RESET_TTL", 300, min_val=60, max_val=3600)

@@ -17,21 +17,24 @@ import logging
 import re
 from typing import Any
 
-import httpx
 from cachetools import TTLCache
 
 try:
     from .. import config as app_config
+    from ..logger import get_logger
     from ..metrics import SEARCH_CACHE
-    from ..services.http_client import post_with_retry
+    from ..services.http_client import post_informacion
     from ..services.circuit_breaker import informacion_cb
+    from ..services._resilience import resilient_call
 except ImportError:
     from ventas import config as app_config
+    from ventas.logger import get_logger
     from ventas.metrics import SEARCH_CACHE
-    from ventas.services.http_client import post_with_retry
+    from ventas.services.http_client import post_informacion
     from ventas.services.circuit_breaker import informacion_cb
+    from ventas.services._resilience import resilient_call
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 COD_OPE = "BUSCAR_PRODUCTOS_SERVICIOS_VENTAS_DIRECTAS"
 MAX_RESULTADOS = 10
@@ -104,7 +107,7 @@ def format_productos_para_respuesta(productos: list[dict[str, Any]]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Llamada a la API (tenacity retry vía post_with_retry + informacion_cb)
+# Llamada a la API (resilient_call + post_informacion)
 # ---------------------------------------------------------------------------
 
 async def _do_busqueda_api(
@@ -115,7 +118,7 @@ async def _do_busqueda_api(
     log_search_apis: bool,
 ) -> dict[str, Any]:
     """
-    Ejecuta la llamada real a la API con tenacity retry. Se llama SOLO desde
+    Ejecuta la llamada real a la API con resilient_call. Se llama SOLO desde
     buscar_productos_servicios, dentro de un asyncio.Lock (anti-thundering herd).
     """
     if log_search_apis:
@@ -123,15 +126,14 @@ async def _do_busqueda_api(
         logger.info("  URL: %s", app_config.API_INFORMACION_URL)
         if logger.isEnabledFor(logging.INFO):
             logger.info("  Enviado: %s", json.dumps(payload, ensure_ascii=False))
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(
-            "[BUSQUEDA] POST %s - %s",
-            app_config.API_INFORMACION_URL,
-            json.dumps(payload, ensure_ascii=False),
-        )
 
     try:
-        data = await post_with_retry(app_config.API_INFORMACION_URL, json=payload)
+        data = await resilient_call(
+            lambda: post_informacion(payload),
+            cb=informacion_cb,
+            circuit_key=id_empresa,
+            service_name="BUSQUEDA",
+        )
 
         if log_search_apis and logger.isEnabledFor(logging.INFO):
             logger.info("  Respuesta: %s", json.dumps(data, ensure_ascii=False))
@@ -144,26 +146,13 @@ async def _do_busqueda_api(
         productos = data.get("productos", [])
         resultado = {"success": True, "productos": productos, "error": None}
 
-        # Éxito: cachear resultado y registrar en circuit breaker
+        # Éxito: cachear resultado
         _busqueda_cache[cache_key] = resultado
-        informacion_cb.record_success(id_empresa)
         logger.debug(
             "[BUSQUEDA] Cache SET id_empresa=%s busqueda=%r (%s productos)",
             id_empresa, busqueda_norm, len(productos),
         )
         return resultado
-
-    except httpx.TransportError as e:
-        logger.warning(
-            "[BUSQUEDA] Error de red id_empresa=%s busqueda=%r: %s: %s",
-            id_empresa, busqueda_norm, type(e).__name__, e,
-        )
-        informacion_cb.record_failure(id_empresa)
-        return {
-            "success": False,
-            "productos": [],
-            "error": "La búsqueda tardó demasiado o tuvo un error. Intenta de nuevo.",
-        }
 
     except Exception as e:
         logger.warning(
@@ -173,7 +162,7 @@ async def _do_busqueda_api(
         return {
             "success": False,
             "productos": [],
-            "error": "La búsqueda tuvo un error inesperado. Intenta de nuevo.",
+            "error": "La búsqueda tardó demasiado. Intenta de nuevo.",
         }
 
 

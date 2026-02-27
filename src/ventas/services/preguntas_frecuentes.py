@@ -3,26 +3,31 @@ Preguntas frecuentes: fetch desde API MaravIA (ws_preguntas_frecuentes.php) para
 Formato Pregunta/Respuesta para que el modelo entienda y use las FAQs.
 """
 
-import logging
+import asyncio
 from typing import Any
 
 from cachetools import TTLCache
 
 try:
     from .. import config as app_config
+    from ..logger import get_logger
     from .http_client import get_client
     from ._resilience import resilient_call
     from .circuit_breaker import preguntas_cb
 except ImportError:
     from ventas import config as app_config
+    from ventas.logger import get_logger
     from ventas.services.http_client import get_client
     from ventas.services._resilience import resilient_call
     from ventas.services.circuit_breaker import preguntas_cb
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache TTL por id_chatbot (1 hora), mismo criterio que contexto_negocio
 _preguntas_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)
+
+# Lock por id_chatbot para evitar thundering herd (mismo patrón que horario_cache en citas).
+_fetch_locks: dict[Any, asyncio.Lock] = {}
 
 
 def format_preguntas_frecuentes_para_prompt(items: list[dict[str, Any]]) -> str:
@@ -76,40 +81,53 @@ async def fetch_preguntas_frecuentes(id_chatbot: Any | None) -> str:
         )
         return cached if cached else ""
 
-    payload = {"id_chatbot": id_chatbot}
-
-    async def _fetch() -> dict:
-        logger.debug("[PREGUNTAS_FRECUENTES] Obteniendo FAQs id_chatbot=%s", id_chatbot)
-        client = get_client()
-        response = await client.post(
-            app_config.API_PREGUNTAS_FRECUENTES_URL,
-            json=payload,
-        )
-        response.raise_for_status()
-        return response.json()
-
-    try:
-        data = await resilient_call(
-            _fetch,
-            cb=preguntas_cb,
-            circuit_key=id_chatbot,
-            service_name="PREGUNTAS_FRECUENTES",
-        )
-    except Exception as e:
-        logger.warning("[PREGUNTAS_FRECUENTES] No se pudo obtener FAQs id_chatbot=%s: %s", id_chatbot, e)
+    # Fast reject: evita adquirir el lock cuando el circuito está abierto
+    if preguntas_cb.is_open(id_chatbot):
         return ""
 
-    if not data.get("success"):
-        logger.warning("[PREGUNTAS_FRECUENTES] API sin éxito id_chatbot=%s: %s", id_chatbot, data.get("error"))
-        return ""
-    items = data.get("preguntas_frecuentes") or []
-    if not items:
-        logger.info("[PREGUNTAS_FRECUENTES] Respuesta recibida id_chatbot=%s, sin preguntas", id_chatbot)
-        return ""
-    logger.info("[PREGUNTAS_FRECUENTES] Respuesta recibida id_chatbot=%s, %s preguntas", id_chatbot, len(items))
-    formatted = format_preguntas_frecuentes_para_prompt(items)
-    _preguntas_cache[id_chatbot] = formatted
-    return formatted
+    # Serializar fetch por id_chatbot (thundering herd prevention)
+    lock = _fetch_locks.setdefault(id_chatbot, asyncio.Lock())
+    async with lock:
+        # Double-check: otra coroutine pudo llenar el cache mientras esperábamos
+        if id_chatbot in _preguntas_cache:
+            cached = _preguntas_cache[id_chatbot]
+            return cached if cached else ""
+
+        payload = {"id_chatbot": id_chatbot}
+
+        async def _fetch() -> dict:
+            logger.debug("[PREGUNTAS_FRECUENTES] Obteniendo FAQs id_chatbot=%s", id_chatbot)
+            client = get_client()
+            response = await client.post(
+                app_config.API_PREGUNTAS_FRECUENTES_URL,
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
+
+        try:
+            data = await resilient_call(
+                _fetch,
+                cb=preguntas_cb,
+                circuit_key=id_chatbot,
+                service_name="PREGUNTAS_FRECUENTES",
+            )
+            if not data.get("success"):
+                logger.warning("[PREGUNTAS_FRECUENTES] API sin éxito id_chatbot=%s: %s", id_chatbot, data.get("error"))
+                return ""
+            items = data.get("preguntas_frecuentes") or []
+            if not items:
+                logger.info("[PREGUNTAS_FRECUENTES] Respuesta recibida id_chatbot=%s, sin preguntas", id_chatbot)
+                return ""
+            logger.info("[PREGUNTAS_FRECUENTES] Respuesta recibida id_chatbot=%s, %s preguntas", id_chatbot, len(items))
+            formatted = format_preguntas_frecuentes_para_prompt(items)
+            _preguntas_cache[id_chatbot] = formatted
+            return formatted
+        except Exception as e:
+            logger.warning("[PREGUNTAS_FRECUENTES] No se pudo obtener FAQs id_chatbot=%s: %s", id_chatbot, e)
+            return ""
+        finally:
+            _fetch_locks.pop(id_chatbot, None)
 
 
 __all__ = ["fetch_preguntas_frecuentes", "format_preguntas_frecuentes_para_prompt"]
