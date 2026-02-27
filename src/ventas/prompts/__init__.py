@@ -74,6 +74,15 @@ async def build_ventas_system_prompt(config: dict[str, Any]) -> str:
     nombre_bot = config.get("nombre_bot")
     if nombre_bot and (not variables.get("nombre_negocio") or variables.get("nombre_negocio") == "la empresa"):
         variables["nombre_negocio"] = nombre_bot
+    variables["nombre_bot"] = nombre_bot  # para "Te presentas como {{ nombre_bot }}"
+
+    # Frases configurables (como en citas); si no viene, el template usa default
+    if config.get("frase_saludo"):
+        variables["frase_saludo"] = config.get("frase_saludo")
+    if config.get("frase_no_sabe"):
+        variables["frase_no_sabe"] = config.get("frase_no_sabe")
+    if config.get("frase_des"):
+        variables["frase_des"] = config.get("frase_des")
 
     # URL de video/imagen de saludo (opcional; el gateway la envía en context.config)
     variables["archivo_saludo"] = (config.get("archivo_saludo") or "").strip()
