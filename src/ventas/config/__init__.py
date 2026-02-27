@@ -19,6 +19,8 @@ from .config import (
     HTTP_RETRY_ATTEMPTS,
     HTTP_RETRY_WAIT_MIN,
     HTTP_RETRY_WAIT_MAX,
+    CB_THRESHOLD,
+    CB_RESET_TTL,
 )
 
 __all__ = [
@@ -40,4 +42,6 @@ __all__ = [
     "HTTP_RETRY_ATTEMPTS",
     "HTTP_RETRY_WAIT_MIN",
     "HTTP_RETRY_WAIT_MAX",
+    "CB_THRESHOLD",
+    "CB_RESET_TTL",
 ]
