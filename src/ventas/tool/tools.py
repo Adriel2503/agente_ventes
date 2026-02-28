@@ -113,47 +113,44 @@ async def registrar_pedido(
     obligatorios: productos elegidos, número de operación del comprobante, datos del
     cliente (nombre, DNI, celular) y datos de entrega o recojo.
 
-    Campos clave:
-    - productos: lista de objetos con "id_catalogo" (el ID devuelto por
-      search_productos_servicios) y "cantidad". Ejemplo:
-      [{"id_catalogo": 3344, "cantidad": 2}]
-    - operacion: número/código de transacción leído de la imagen del comprobante
-      (Yape, BCP, transferencia, etc.).
-    - modalidad: "Delivery" si el cliente quiere envío a domicilio, "Recojo" si retira
-      en tienda.
-    - tipo_envio: tipo de envío acordado según las zonas del negocio (ej. "Delivery",
-      "Recojo", "rapidito"). Si es recojo en tienda puedes usar "Recojo".
-    - direccion: dirección completa de entrega. Vacío si es recojo en sucursal.
-    - costo_envio: monto numérico del costo de envío (0 si recojo).
-    - sucursal: nombre de la sucursal de recojo. Vacío si es delivery.
-    - nombre, dni, celular: datos del cliente (obligatorios).
-    - email: correo del cliente (opcional).
-    - medio_pago: medio con el que pagó (ej. "yape", "transferencia").
-    - monto_pagado: monto total pagado.
-    - fecha_entrega_estimada: fecha estimada de entrega en formato "YYYY-MM-DD"
-      (usa la información del sistema de envíos del negocio).
-    - observacion: notas adicionales (opcional).
+    modalidad: "Delivery" si el cliente eligió delivery; "Sucursal" si eligió recoger
+    en sucursal. No uses "Recojo".
+
+    tipo_envio: En Delivery = valor "Tipo" de la zona elegida en el bloque "Costos de
+    envío por zona" del system prompt (ej. "Express", "Normal", lo que configure el
+    negocio). En Sucursal = "Sucursal".
+
+    Por modo:
+    - Delivery: direccion = a dónde enviar (pregunta al cliente); costo_envio =
+      número del "Costo" de la zona elegida; fecha_entrega_estimada = hoy + "Tiempo"
+      de esa zona (YYYY-MM-DD); sucursal = "".
+    - Sucursal: sucursal = nombre de la sucursal elegida (bloque "Sucursales");
+      direccion = ""; costo_envio = 0; fecha_entrega_estimada = "".
+
+    Campos comunes: productos (id_catalogo de search_productos_servicios + cantidad),
+    operacion (número del comprobante), nombre, dni, celular, medio_pago, monto_pagado.
+    email y observacion opcionales.
 
     IMPORTANTE: No inventes IDs de producto. El id_catalogo debe ser el ID que apareció
     en la respuesta de search_productos_servicios. Si no tienes algún dato obligatorio,
     pídelo al cliente antes de llamar esta herramienta.
 
     Args:
-        productos:              Lista de {"id_catalogo": int o str, "cantidad": int o str}.
+        productos:              Lista de {"id_catalogo": int, "cantidad": int}.
         operacion:              Número de operación del comprobante (entero).
-        modalidad:              "Delivery" o "Recojo".
-        tipo_envio:             Tipo de envío (ej. "Delivery", "Recojo").
+        modalidad:              "Delivery" o "Sucursal".
+        tipo_envio:             En Delivery: "Tipo" de la zona elegida; en Sucursal: "Sucursal".
         nombre:                 Nombre completo del cliente.
         dni:                    DNI del cliente (entero).
         celular:                Teléfono del cliente (entero).
         medio_pago:             Medio de pago (ej. "yape").
         monto_pagado:           Monto pagado.
-        direccion:              Dirección de entrega (vacío si recojo).
-        costo_envio:            Costo de envío, número (0 si recojo).
+        direccion:              Dirección de entrega (Delivery); vacío si Sucursal.
+        costo_envio:            Costo de envío (Delivery); 0 si Sucursal.
         observacion:            Nota adicional (opcional).
-        fecha_entrega_estimada: Fecha estimada de entrega "YYYY-MM-DD" (opcional).
+        fecha_entrega_estimada: Fecha YYYY-MM-DD (Delivery); vacío si Sucursal.
         email:                  Correo del cliente (opcional).
-        sucursal:               Sucursal de recojo (vacío si delivery).
+        sucursal:               Nombre sucursal (Sucursal); vacío si Delivery.
         runtime:                Contexto automático inyectado por LangChain.
 
     Returns:
