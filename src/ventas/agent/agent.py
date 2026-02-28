@@ -22,6 +22,7 @@ from cachetools import TTLCache
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from pydantic import BaseModel
 
 try:
@@ -51,7 +52,11 @@ class VentasStructuredResponse(BaseModel):
 # Singletons de módulo
 # ---------------------------------------------------------------------------
 
-_checkpointer = InMemorySaver()
+_checkpointer = InMemorySaver(
+    serde=JsonPlusSerializer(
+        allowed_msgpack_modules=[("ventas.agent.agent", "VentasStructuredResponse")]
+    )
+)
 
 # Modelo LLM: una sola instancia para todo el proceso.
 # init_chat_model es síncrono; no hay riesgo de race condition en asyncio.
