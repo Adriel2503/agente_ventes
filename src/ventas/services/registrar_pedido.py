@@ -31,20 +31,30 @@ COD_OPE = "REGISTRAR_PEDIDO"
 ID_MONEDA_DEFAULT = 1
 
 
+def _to_int(val: Any, default: int = 0) -> int:
+    """Convierte a int para el payload (operacion, dni, celular, costo_envio, id_catalogo, cantidad)."""
+    if val is None or val == "":
+        return default
+    try:
+        return int(float(val)) if isinstance(val, (int, float)) else int(str(val).strip())
+    except (ValueError, TypeError):
+        return default
+
+
 async def registrar_pedido(
     id_empresa: int,
     id_prospecto: int,
-    productos: list[dict[str, Any]],
-    operacion: str,
+    productos: list[dict[str, int, Any]],
+    operacion: str | int,
     modalidad: str,
     tipo_envio: str,
     nombre: str,
-    dni: str,
-    celular: str,
+    dni: str | int,
+    celular: str | int,
     medio_pago: str,
     monto_pagado: float,
     direccion: str = "",
-    costo_envio: float = 0,
+    costo_envio: float | int = 0,
     observacion: str = "",
     fecha_entrega_estimada: str = "",
     email: str = "",
@@ -77,22 +87,26 @@ async def registrar_pedido(
     Returns:
         String con mensaje de éxito o de error para que la tool lo devuelva al agente.
     """
+    productos_payload = [
+        {"id_catalogo": _to_int(p.get("id_catalogo")), "cantidad": _to_int(p.get("cantidad"))}
+        for p in productos
+    ]
     payload: dict[str, Any] = {
         "codOpe": COD_OPE,
         "id_empresa": id_empresa,
         "id_moneda": ID_MONEDA_DEFAULT,
         "id_prospecto": id_prospecto,
-        "productos": productos,
-        "operacion": operacion,
+        "productos": productos_payload,
+        "operacion": _to_int(operacion),
         "modalidad": modalidad,
         "tipo_envio": tipo_envio,
         "direccion": direccion,
-        "costo_envio": costo_envio,
+        "costo_envio": _to_int(costo_envio),
         "observacion": observacion,
         "fecha_entrega_estimada": fecha_entrega_estimada,
         "nombre": nombre,
-        "dni": dni,
-        "celular": celular,
+        "dni": _to_int(dni),
+        "celular": _to_int(celular),
         "email": email,
         "medio_pago": medio_pago,
         "sucursal": sucursal,

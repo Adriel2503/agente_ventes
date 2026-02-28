@@ -82,24 +82,24 @@ async def search_productos_servicios(
 
 
 class ProductoItem(TypedDict):
-    """Item de producto para registrar en un pedido."""
+    """Item de producto para registrar en un pedido. id_catalogo y cantidad pueden llegar como int o str desde el LLM."""
     id_catalogo: int
-    cantidad: int
+    cantidad: int 
 
 
 @tool
 async def registrar_pedido(
     productos: list[ProductoItem],
-    operacion: str,
+    operacion: int,
     modalidad: str,
     tipo_envio: str,
     nombre: str,
-    dni: str,
-    celular: str,
+    dni: int,
+    celular: int,
     medio_pago: str,
     monto_pagado: float,
     direccion: str = "",
-    costo_envio: float = 0,
+    costo_envio: float | int = 0,
     observacion: str = "",
     fecha_entrega_estimada: str = "",
     email: str = "",
@@ -139,17 +139,17 @@ async def registrar_pedido(
     pídelo al cliente antes de llamar esta herramienta.
 
     Args:
-        productos:              Lista de {"id_catalogo": int, "cantidad": int}.
-        operacion:              Número de operación del comprobante.
+        productos:              Lista de {"id_catalogo": int o str, "cantidad": int o str}.
+        operacion:              Número de operación del comprobante (entero).
         modalidad:              "Delivery" o "Recojo".
         tipo_envio:             Tipo de envío (ej. "Delivery", "Recojo").
         nombre:                 Nombre completo del cliente.
-        dni:                    DNI del cliente.
-        celular:                Teléfono del cliente.
+        dni:                    DNI del cliente (entero).
+        celular:                Teléfono del cliente (entero).
         medio_pago:             Medio de pago (ej. "yape").
         monto_pagado:           Monto pagado.
         direccion:              Dirección de entrega (vacío si recojo).
-        costo_envio:            Costo de envío (0 si recojo).
+        costo_envio:            Costo de envío, número (0 si recojo).
         observacion:            Nota adicional (opcional).
         fecha_entrega_estimada: Fecha estimada de entrega "YYYY-MM-DD" (opcional).
         email:                  Correo del cliente (opcional).
