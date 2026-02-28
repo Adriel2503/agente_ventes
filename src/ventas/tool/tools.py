@@ -124,8 +124,17 @@ async def registrar_pedido(
     - Delivery: direccion = a dónde enviar (pregunta al cliente); costo_envio =
       número del "Costo" de la zona elegida; fecha_entrega_estimada = hoy + "Tiempo"
       de esa zona (YYYY-MM-DD); sucursal = "".
-    - Sucursal: sucursal = nombre de la sucursal elegida (bloque "Sucursales");
+    - Sucursal: sucursal = nombre exacto de la sucursal elegida del bloque
+      "Sucursales (para recojo en tienda)" inyectado en el system prompt;
       direccion = ""; costo_envio = 0; fecha_entrega_estimada = "".
+
+    Solo rellena con valor:
+    - Delivery: productos, operacion, modalidad, tipo_envio, direccion, costo_envio,
+      fecha_entrega_estimada, nombre, dni, celular, medio_pago, monto_pagado;
+      sucursal="".
+    - Sucursal: productos, operacion, modalidad, tipo_envio="Sucursal", sucursal,
+      nombre, dni, celular, medio_pago, monto_pagado;
+      direccion="", costo_envio=0, fecha_entrega_estimada="".
 
     Campos comunes: productos (id_catalogo de search_productos_servicios + cantidad),
     operacion (número del comprobante), nombre, dni, celular, medio_pago, monto_pagado.
@@ -150,7 +159,7 @@ async def registrar_pedido(
         observacion:            Nota adicional (opcional).
         fecha_entrega_estimada: Fecha YYYY-MM-DD (Delivery); vacío si Sucursal.
         email:                  Correo del cliente (opcional).
-        sucursal:               Nombre sucursal (Sucursal); vacío si Delivery.
+        sucursal:               Nombre de la sucursal elegida (del bloque "Sucursales" del system prompt); vacío si Delivery.
         runtime:                Contexto automático inyectado por LangChain.
 
     Returns:
