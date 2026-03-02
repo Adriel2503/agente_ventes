@@ -32,7 +32,7 @@ ID_MONEDA_DEFAULT = 1
 
 
 def _to_int(val: Any, default: int = 0) -> int:
-    """Convierte a int para el payload (operacion, dni, celular, id_catalogo, cantidad)."""
+    """Convierte a int para el payload (dni, celular, id_catalogo, cantidad)."""
     if val is None or val == "":
         return default
     try:
@@ -55,7 +55,7 @@ async def registrar_pedido(
     id_empresa: int,
     id_prospecto: int,
     productos: list[dict[str, int, Any]],
-    operacion: str | int,
+    operacion: str,
     modalidad: str,
     nombre: str,
     dni: str | int,
@@ -79,7 +79,7 @@ async def registrar_pedido(
         id_empresa:             ID de la empresa (del contexto del agente).
         id_prospecto:           ID del prospecto/cliente (= session_id del agente).
         productos:              Lista de { "id_catalogo": <int>, "cantidad": <int> }.
-        operacion:              Número/código de operación de la transacción (Yape, BCP, etc.).
+        operacion:              Código de operación de la transacción (Yape, BCP, etc.). Puede ser numérico o alfanumérico.
         modalidad:              "Delivery" o "Sucursal".
         tipo_envio:             Tipo de envío acordado (ej. "Express", "Normal"). Vacío si modalidad es Sucursal.
         nombre:                 Nombre completo del cliente.
@@ -116,7 +116,7 @@ async def registrar_pedido(
         "id_moneda": ID_MONEDA_DEFAULT,
         "id_prospecto": id_prospecto,
         "productos": productos_payload,
-        "operacion": _to_int(operacion),
+        "operacion": str(operacion).strip(),
         "modalidad": modalidad,
         "tipo_envio": tipo_envio,
         "direccion": direccion,

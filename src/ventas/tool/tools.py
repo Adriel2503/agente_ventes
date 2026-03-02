@@ -92,7 +92,7 @@ class ProductoItem(TypedDict):
 @tool
 async def registrar_pedido_delivery(
     productos: list[ProductoItem],
-    operacion: int,
+    operacion: str,
     tipo_envio: str,
     direccion: str,
     costo_envio: float,
@@ -121,7 +121,7 @@ async def registrar_pedido_delivery(
 
     Args:
         productos:              Lista de {"id_catalogo": int, "cantidad": int}.
-        operacion:              Número de operación del comprobante (entero).
+        operacion:              Código de operación del comprobante (puede ser numérico o alfanumérico).
         tipo_envio:             Valor "Tipo" de la zona elegida en el bloque
                                 "Costos de envío por zona" del system prompt
                                 (ej. "Express", "Normal").
@@ -193,7 +193,7 @@ async def registrar_pedido_delivery(
 @tool
 async def registrar_pedido_sucursal(
     productos: list[ProductoItem],
-    operacion: int,
+    operacion: str,
     sucursal: str,
     nombre: str,
     dni: int,
@@ -220,7 +220,7 @@ async def registrar_pedido_sucursal(
 
     Args:
         productos:   Lista de {"id_catalogo": int, "cantidad": int}.
-        operacion:   Número de operación del comprobante (entero).
+        operacion:   Código de operación del comprobante (puede ser numérico o alfanumérico).
         sucursal:    Nombre exacto de la sucursal elegida (del bloque
                      "Sucursales (para recojo en tienda)" del system prompt).
         nombre:      Nombre completo del cliente.
