@@ -5,12 +5,15 @@ FAQs, costos de envío) para construir el system prompt inyectado al LLM.
 """
 
 import asyncio
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 try:
+    from .. import config as app_config
     from ..logger import get_logger
     from ..services.categorias import obtener_categorias
     from ..services.contexto_negocio import fetch_contexto_negocio
@@ -19,6 +22,7 @@ try:
     from ..services.preguntas_frecuentes import fetch_preguntas_frecuentes
     from ..services.sucursales import obtener_sucursales
 except ImportError:
+    from ventas import config as app_config
     from ventas.logger import get_logger
     from ventas.services.categorias import obtener_categorias
     from ventas.services.contexto_negocio import fetch_contexto_negocio
@@ -30,6 +34,13 @@ except ImportError:
 logger = get_logger(__name__)
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent
+_ZONA_PERU = ZoneInfo(app_config.TIMEZONE)
+
+_DIAS_ESPANOL = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+_MESES_ESPANOL = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+]
 
 # Jinja2 env y template como singletons de módulo.
 # Environment compila y cachea templates internamente; crearlo por request
@@ -69,6 +80,18 @@ async def build_ventas_system_prompt(config: dict[str, Any]) -> str:
         System prompt formateado.
     """
     variables = _apply_defaults(config)
+
+    # Fecha actual en Perú (para fecha_entrega_estimada y contexto del agente)
+    now = datetime.now(_ZONA_PERU)
+    variables["fecha_iso"] = now.strftime("%Y-%m-%d")
+    dia_nombre = _DIAS_ESPANOL[now.weekday()]
+    mes_nombre = _MESES_ESPANOL[now.month - 1]
+    variables["fecha_completa"] = f"{now.day} de {mes_nombre} de {now.year} es {dia_nombre}"
+    logger.info(
+        "[PROMPT] Fecha inyectada en prompt - Hoy: %s, Para API: %s",
+        variables["fecha_completa"],
+        variables["fecha_iso"],
+    )
 
     # Compatibilidad con mismo payload que citas: nombre_bot → nombre_negocio si no viene nombre_negocio
     nombre_bot = config.get("nombre_bot")
