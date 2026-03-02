@@ -14,6 +14,7 @@ Campos del payload:
                       dni, celular, email, medio_pago, sucursal, monto_pagado
 """
 
+import json
 from typing import Any
 
 try:
@@ -136,6 +137,7 @@ async def registrar_pedido(
         "[REGISTRAR_PEDIDO] POST id_empresa=%s id_prospecto=%s productos=%s operacion=%s",
         id_empresa, id_prospecto, productos, operacion,
     )
+    logger.debug("[REGISTRAR_PEDIDO] Payload completo:\n%s", json.dumps(payload, indent=2, ensure_ascii=False))
 
     try:
         client = get_client()
