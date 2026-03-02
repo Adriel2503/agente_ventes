@@ -80,8 +80,8 @@ async def registrar_pedido(
         id_prospecto:           ID del prospecto/cliente (= session_id del agente).
         productos:              Lista de { "id_catalogo": <int>, "cantidad": <int> }.
         operacion:              Número/código de operación de la transacción (Yape, BCP, etc.).
-        modalidad:              "Delivery" o "Recojo".
-        tipo_envio:             Tipo de envío acordado (ej. "rapidito", "Recojo").
+        modalidad:              "Delivery" o "Sucursal".
+        tipo_envio:             Tipo de envío acordado (ej. "Express", "Normal"). Vacío si modalidad es Sucursal.
         nombre:                 Nombre completo del cliente.
         dni:                    DNI del cliente.
         celular:                Teléfono del cliente.
