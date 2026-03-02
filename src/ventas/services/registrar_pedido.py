@@ -57,12 +57,12 @@ async def registrar_pedido(
     productos: list[dict[str, int, Any]],
     operacion: str | int,
     modalidad: str,
-    tipo_envio: str,
     nombre: str,
     dni: str | int,
     celular: str | int,
     medio_pago: str,
     monto_pagado: float,
+    tipo_envio: str = "",
     direccion: str = "",
     costo_envio: float | int = 0,
     observacion: str = "",
@@ -97,6 +97,15 @@ async def registrar_pedido(
     Returns:
         String con mensaje de éxito o de error para que la tool lo devuelva al agente.
     """
+    # Defaults por modalidad — cada tool solo envía sus campos
+    if modalidad == "Sucursal":
+        tipo_envio = ""
+        direccion = ""
+        costo_envio = 0
+        fecha_entrega_estimada = ""
+    elif modalidad == "Delivery":
+        sucursal = ""
+
     productos_payload = [
         {"id_catalogo": _to_int(p.get("id_catalogo")), "cantidad": _to_int(p.get("cantidad"))}
         for p in productos

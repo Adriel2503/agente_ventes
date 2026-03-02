@@ -1,7 +1,9 @@
 """
 Tools del agente de ventas.
-Incluye search_productos_servicios (búsqueda en catálogo vía BUSCAR_PRODUCTOS_SERVICIOS_VENTAS_DIRECTAS)
-y registrar_pedido (registro del pedido confirmado vía REGISTRAR_PEDIDO).
+Incluye:
+  - search_productos_servicios: búsqueda en catálogo vía BUSCAR_PRODUCTOS_SERVICIOS_VENTAS_DIRECTAS
+  - registrar_pedido_delivery: registra pedido con envío a domicilio
+  - registrar_pedido_sucursal: registra pedido con recojo en sucursal
 """
 
 from typing import Any, TypedDict
@@ -84,95 +86,67 @@ async def search_productos_servicios(
 class ProductoItem(TypedDict):
     """Item de producto para registrar en un pedido. id_catalogo y cantidad pueden llegar como int o str desde el LLM."""
     id_catalogo: int
-    cantidad: int 
+    cantidad: int
 
 
 @tool
-async def registrar_pedido(
+async def registrar_pedido_delivery(
     productos: list[ProductoItem],
     operacion: int,
-    modalidad: str,
     tipo_envio: str,
+    direccion: str,
+    costo_envio: float,
+    fecha_entrega_estimada: str,
     nombre: str,
     dni: int,
     celular: int,
     medio_pago: str,
     monto_pagado: float,
-    direccion: str = "",
-    costo_envio: float | int = 0,
+    email: str,
     observacion: str = "",
-    fecha_entrega_estimada: str = "",
-    email: str = "",
-    sucursal: str = "",
     runtime: ToolRuntime = None,
 ) -> str:
     """
-    Registra el pedido del cliente en el sistema una vez confirmado.
+    Registra un pedido con envío a domicilio (Delivery).
 
-    Úsala SOLO cuando el cliente haya confirmado el pedido Y tengas todos los datos
-    obligatorios: productos elegidos, número de operación del comprobante, datos del
-    cliente (nombre, DNI, celular) y datos de entrega o recojo.
+    Úsala SOLO cuando el cliente eligió DELIVERY y tienes todos estos datos:
+    productos confirmados, número de operación del comprobante, tipo y costo
+    de envío según la zona, dirección de entrega, y datos del cliente.
 
-    modalidad: "Delivery" si el cliente eligió delivery; "Sucursal" si eligió recoger
-    en sucursal. No uses "Recojo".
-
-    tipo_envio: En Delivery = valor "Tipo" de la zona elegida en el bloque "Costos de
-    envío por zona" del system prompt (ej. "Express", "Normal", lo que configure el
-    negocio). En Sucursal = "Sucursal".
-
-    Por modo:
-    - Delivery: direccion = a dónde enviar (pregunta al cliente); costo_envio =
-      número del "Costo" de la zona elegida; fecha_entrega_estimada = hoy + "Tiempo"
-      de esa zona (YYYY-MM-DD); sucursal = "".
-    - Sucursal: sucursal = nombre exacto de la sucursal elegida del bloque
-      "Sucursales (para recojo en tienda)" inyectado en el system prompt;
-      direccion = ""; costo_envio = 0; fecha_entrega_estimada = "".
-
-    Solo rellena con valor:
-    - Delivery: productos, operacion, modalidad, tipo_envio, direccion, costo_envio,
-      fecha_entrega_estimada, nombre, dni, celular, medio_pago, monto_pagado;
-      sucursal="".
-    - Sucursal: productos, operacion, modalidad, tipo_envio="Sucursal", sucursal,
-      nombre, dni, celular, medio_pago, monto_pagado;
-      direccion="", costo_envio=0, fecha_entrega_estimada="".
-
-    Campos comunes: productos (id_catalogo de search_productos_servicios + cantidad),
-    operacion (número del comprobante), nombre, dni, celular, medio_pago, monto_pagado.
-    email y observacion opcionales.
-
-    IMPORTANTE: No inventes IDs de producto. El id_catalogo debe ser el ID que apareció
-    en la respuesta de search_productos_servicios. Si no tienes algún dato obligatorio,
-    pídelo al cliente antes de llamar esta herramienta.
+    IMPORTANTE: No inventes IDs de producto. El id_catalogo debe ser el ID
+    que devolvió search_productos_servicios. Si falta algún dato, pídelo
+    al cliente antes de llamar esta herramienta.
 
     Args:
         productos:              Lista de {"id_catalogo": int, "cantidad": int}.
         operacion:              Número de operación del comprobante (entero).
-        modalidad:              "Delivery" o "Sucursal".
-        tipo_envio:             En Delivery: "Tipo" de la zona elegida; en Sucursal: "Sucursal".
+        tipo_envio:             Valor "Tipo" de la zona elegida en el bloque
+                                "Costos de envío por zona" del system prompt
+                                (ej. "Express", "Normal").
+        direccion:              Dirección exacta de entrega del cliente.
+        costo_envio:            Valor numérico "Costo" de la zona elegida.
+        fecha_entrega_estimada: Fecha de entrega estimada en formato YYYY-MM-DD
+                                (hoy + "Tiempo" de la zona elegida).
         nombre:                 Nombre completo del cliente.
         dni:                    DNI del cliente (entero).
         celular:                Teléfono del cliente (entero).
-        medio_pago:             Medio de pago (ej. "yape").
-        monto_pagado:           Monto pagado.
-        direccion:              Dirección de entrega (Delivery); vacío si Sucursal.
-        costo_envio:            Costo de envío (Delivery); 0 si Sucursal.
+        medio_pago:             Medio de pago usado (ej. "yape", "transferencia").
+        monto_pagado:           Monto pagado por el cliente.
+        email:                  Correo del cliente.
         observacion:            Nota adicional (opcional).
-        fecha_entrega_estimada: Fecha YYYY-MM-DD (Delivery); vacío si Sucursal.
-        email:                  Correo del cliente (opcional).
-        sucursal:               Nombre de la sucursal elegida (del bloque "Sucursales" del system prompt); vacío si Delivery.
         runtime:                Contexto automático inyectado por LangChain.
 
     Returns:
         Mensaje de éxito con número de pedido, o mensaje de error.
     """
     logger.debug(
-        "[TOOL] registrar_pedido - modalidad=%s productos=%s operacion=%s",
-        modalidad, productos, operacion,
+        "[TOOL] registrar_pedido_delivery - productos=%s operacion=%s direccion=%s",
+        productos, operacion, direccion,
     )
 
     ctx = runtime.context if runtime else None
     if not ctx or getattr(ctx, "id_empresa", None) is None:
-        logger.warning("[TOOL] registrar_pedido - llamada sin contexto de empresa")
+        logger.warning("[TOOL] registrar_pedido_delivery - llamada sin contexto de empresa")
         return "No tengo el contexto de empresa; no puedo registrar el pedido en este momento."
 
     id_empresa = ctx.id_empresa
@@ -185,7 +159,7 @@ async def registrar_pedido(
             id_prospecto=id_prospecto,
             productos=productos,
             operacion=operacion,
-            modalidad=modalidad,
+            modalidad="Delivery",
             tipo_envio=tipo_envio,
             nombre=nombre,
             dni=dni,
@@ -197,12 +171,11 @@ async def registrar_pedido(
             observacion=observacion,
             fecha_entrega_estimada=fecha_entrega_estimada,
             email=email,
-            sucursal=sucursal,
         )
     except Exception as e:
         _tool_status = "error"
         logger.error(
-            "[TOOL] registrar_pedido - %s: %s (id_empresa=%s, operacion=%r)",
+            "[TOOL] registrar_pedido_delivery - %s: %s (id_empresa=%s, operacion=%r)",
             type(e).__name__,
             e,
             id_empresa,
@@ -212,9 +185,103 @@ async def registrar_pedido(
         return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
 
     finally:
-        TOOL_CALLS.labels(tool="registrar_pedido", status=_tool_status).inc()
+        TOOL_CALLS.labels(tool="registrar_pedido_delivery", status=_tool_status).inc()
 
 
-AGENT_TOOLS = [search_productos_servicios, registrar_pedido]
+@tool
+async def registrar_pedido_sucursal(
+    productos: list[ProductoItem],
+    operacion: int,
+    sucursal: str,
+    nombre: str,
+    dni: int,
+    celular: int,
+    medio_pago: str,
+    monto_pagado: float,
+    email: str,
+    observacion: str = "",
+    runtime: ToolRuntime = None,
+) -> str:
+    """
+    Registra un pedido con recojo en sucursal.
 
-__all__ = ["search_productos_servicios", "registrar_pedido", "AGENT_TOOLS"]
+    Úsala SOLO cuando el cliente eligió RECOGER EN SUCURSAL y tienes todos
+    estos datos: productos confirmados, número de operación del comprobante,
+    nombre exacto de la sucursal elegida, y datos del cliente.
+
+    IMPORTANTE: No inventes IDs de producto. El id_catalogo debe ser el ID
+    que devolvió search_productos_servicios. El nombre de la sucursal debe
+    ser exactamente el que aparece en el bloque "Sucursales" del system prompt.
+    Si falta algún dato, pídelo al cliente antes de llamar esta herramienta.
+
+    Args:
+        productos:   Lista de {"id_catalogo": int, "cantidad": int}.
+        operacion:   Número de operación del comprobante (entero).
+        sucursal:    Nombre exacto de la sucursal elegida (del bloque
+                     "Sucursales (para recojo en tienda)" del system prompt).
+        nombre:      Nombre completo del cliente.
+        dni:         DNI del cliente (entero).
+        celular:     Teléfono del cliente (entero).
+        medio_pago:  Medio de pago usado (ej. "yape", "transferencia").
+        monto_pagado: Monto pagado por el cliente.
+        email:       Correo del cliente.
+        observacion: Nota adicional (opcional).
+        runtime:     Contexto automático inyectado por LangChain.
+
+    Returns:
+        Mensaje de éxito con número de pedido, o mensaje de error.
+    """
+    logger.debug(
+        "[TOOL] registrar_pedido_sucursal - productos=%s operacion=%s sucursal=%s",
+        productos, operacion, sucursal,
+    )
+
+    ctx = runtime.context if runtime else None
+    if not ctx or getattr(ctx, "id_empresa", None) is None:
+        logger.warning("[TOOL] registrar_pedido_sucursal - llamada sin contexto de empresa")
+        return "No tengo el contexto de empresa; no puedo registrar el pedido en este momento."
+
+    id_empresa = ctx.id_empresa
+    id_prospecto = getattr(ctx, "session_id", 0)
+
+    _tool_status = "ok"
+    try:
+        return await _svc_registrar_pedido(
+            id_empresa=id_empresa,
+            id_prospecto=id_prospecto,
+            productos=productos,
+            operacion=operacion,
+            modalidad="Sucursal",
+            nombre=nombre,
+            dni=dni,
+            celular=celular,
+            medio_pago=medio_pago,
+            monto_pagado=monto_pagado,
+            observacion=observacion,
+            email=email,
+            sucursal=sucursal,
+        )
+    except Exception as e:
+        _tool_status = "error"
+        logger.error(
+            "[TOOL] registrar_pedido_sucursal - %s: %s (id_empresa=%s, operacion=%r)",
+            type(e).__name__,
+            e,
+            id_empresa,
+            operacion,
+            exc_info=True,
+        )
+        return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
+
+    finally:
+        TOOL_CALLS.labels(tool="registrar_pedido_sucursal", status=_tool_status).inc()
+
+
+AGENT_TOOLS = [search_productos_servicios, registrar_pedido_delivery, registrar_pedido_sucursal]
+
+__all__ = [
+    "search_productos_servicios",
+    "registrar_pedido_delivery",
+    "registrar_pedido_sucursal",
+    "AGENT_TOOLS",
+]

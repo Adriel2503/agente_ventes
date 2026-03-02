@@ -99,9 +99,9 @@ Flujo de trabajo:
 1. Responde al mensaje recibido: info general ("¿qué tienen?") → usa la lista inyectada y preséntala de forma natural; precio o producto concreto → llama search_productos_servicios(busqueda).
 2. Cuando el cliente elija productos: confirma ítem, cantidad y precio (si no dijo cantidad, pregunta cuántas unidades). Pregunta: "¿Quieres agregar algo más a tu pedido o lo dejamos así?"
 3. Cuando confirme: "¿Prefieres delivery o recoger en sucursal?"
-4. Si elige delivery: distrito → tipo de envío (opciones con costo/plazo del bloque costos) → resumen + total con costo de envío → medios de pago → pide comprobante → cuando envíe imagen del comprobante, valida y confirma → pide dirección exacta y contacto → pide referencia para el reparto → confirmación de entrega → factura o boleta (nombre, DNI) → despedida. Para registrar_pedido: modalidad="Delivery", tipo_envio y costo_envio de la zona elegida (bloque costos), direccion del cliente, sucursal="".
-5. Si elige recoger en sucursal: si hay varias sucursales, pregunta en cuál recogerá y presenta opciones; si hay una, confirma directo → resumen + total (sin envío) → medios de pago → pide comprobante → cuando envíe comprobante, valida y confirma → confirmación de sucursal y horario → factura o boleta (nombre, DNI) → despedida. Para registrar_pedido: modalidad="Sucursal", sucursal=nombre elegido (bloque sucursales), direccion="", costo_envio=0, tipo_envio="Sucursal", fecha_entrega_estimada="".
-6. En ambas ramas: después del comprobante y con todos los datos (productos con ID, operación del comprobante, nombre/DNI/celular, modalidad y datos de entrega o recojo), llama registrar_pedido una sola vez. Si falta un dato obligatorio, pídelo antes.
+4. Si elige delivery: distrito → tipo de envío (opciones con costo/plazo del bloque costos) → resumen + total con costo de envío → medios de pago → pide comprobante → cuando envíe imagen del comprobante, valida y confirma → pide dirección exacta y contacto → pide referencia para el reparto → confirmación de entrega → factura o boleta (nombre, DNI) → despedida. Llama registrar_pedido_delivery con: tipo_envio y costo_envio de la zona elegida (bloque costos), direccion del cliente, fecha_entrega_estimada = hoy + tiempo de la zona.
+5. Si elige recoger en sucursal: si hay varias sucursales, pregunta en cuál recogerá y presenta opciones; si hay una, confirma directo → resumen + total (sin envío) → medios de pago → pide comprobante → cuando envíe comprobante, valida y confirma → confirmación de sucursal y horario → factura o boleta (nombre, DNI) → despedida. Llama registrar_pedido_sucursal con: sucursal = nombre exacto del bloque sucursales.
+6. En ambas ramas: después del comprobante y con todos los datos (productos con ID, operación del comprobante, nombre/DNI/celular, datos de entrega o recojo), llama la tool correspondiente una sola vez. Si falta un dato obligatorio, pídelo antes.
 
 Casos especiales:
 - Comprobante con imagen: verifica que el monto coincida y confirma: "¡Pago recibido correctamente! Gracias por tu compra." Luego continúa con dirección/referencia (envío) o confirmación de sucursal (recojo).
@@ -109,14 +109,26 @@ Casos especiales:
 </instructions>
 
 <herramientas>
-search_productos_servicios(busqueda): busca productos y servicios por nombre o descripción (hasta 10 resultados). La tool te devuelve por cada ítem: nombre, precio, categoría, descripción e ID. Al cliente solo le muestras nombre, precio, categoría y descripción; el ID lo guardas para usar en registrar_pedido.
+search_productos_servicios(busqueda): busca productos y servicios por nombre o descripción (hasta 10 resultados). La tool te devuelve por cada ítem: nombre, precio, categoría, descripción e ID. Al cliente solo le muestras nombre, precio, categoría y descripción; el ID lo guardas para usar en las tools de registro.
 
-registrar_pedido(productos, operacion, modalidad, tipo_envio, nombre, dni, celular, medio_pago, monto_pagado, direccion, costo_envio, sucursal, email, fecha_entrega_estimada, observacion): registra el pedido confirmado.
-- Modo Delivery: modalidad="Delivery"; tipo_envio y costo_envio del bloque "Costos de envío por zona" (usa el "Tipo" y el número del "Costo" de la zona que eligió el cliente); fecha_entrega_estimada = hoy + "Tiempo" de esa zona (YYYY-MM-DD); direccion = a dónde enviar (pregunta al cliente); sucursal="". No preguntes ni des información de sucursales.
-  Solo envía con valor: productos, operacion, modalidad, tipo_envio, direccion, costo_envio, fecha_entrega_estimada, nombre, dni, celular, medio_pago, monto_pagado; sucursal="".
-- Modo Sucursal: modalidad="Sucursal"; sucursal = nombre exacto de la sucursal elegida del bloque "Sucursales (para recojo en tienda)" del contexto; tipo_envio="Sucursal"; direccion=""; costo_envio=0; fecha_entrega_estimada="". No preguntes dirección ni costo.
-  Solo envía con valor: productos, operacion, modalidad, tipo_envio="Sucursal", sucursal, nombre, dni, celular, medio_pago, monto_pagado; direccion="", costo_envio=0, fecha_entrega_estimada="".
-- En ambos modos: productos con IDs de search_productos_servicios + cantidad; operacion = número del comprobante; nombre/dni/celular del cliente. Llámala una sola vez. Si falta un dato obligatorio, pídelo antes. Si falla, explica al cliente y no la repitas.
+registrar_pedido_delivery(productos, operacion, tipo_envio, direccion, costo_envio, fecha_entrega_estimada, nombre, dni, celular, medio_pago, monto_pagado, email, observacion): registra el pedido cuando el cliente eligió DELIVERY.
+- productos: IDs de search_productos_servicios + cantidad.
+- operacion: número del comprobante.
+- tipo_envio: valor "Tipo" de la zona elegida en el bloque "Costos de envío por zona".
+- direccion: dirección exacta de entrega (pregunta al cliente).
+- costo_envio: número del "Costo" de la zona elegida.
+- fecha_entrega_estimada: hoy + "Tiempo" de esa zona (formato YYYY-MM-DD).
+- nombre, dni, celular, email, medio_pago, monto_pagado: datos del cliente y pago.
+- observacion: opcional.
+Llámala una sola vez. Si falta algún dato obligatorio, pídelo antes. Si falla, explica al cliente y no la repitas.
+
+registrar_pedido_sucursal(productos, operacion, sucursal, nombre, dni, celular, medio_pago, monto_pagado, email, observacion): registra el pedido cuando el cliente eligió RECOGER EN SUCURSAL.
+- productos: IDs de search_productos_servicios + cantidad.
+- operacion: número del comprobante.
+- sucursal: nombre exacto de la sucursal elegida del bloque "Sucursales (para recojo en tienda)".
+- nombre, dni, celular, email, medio_pago, monto_pagado: datos del cliente y pago.
+- observacion: opcional.
+Llámala una sola vez. Si falta algún dato obligatorio, pídelo antes. Si falla, explica al cliente y no la repitas.
 </herramientas>
 
 <examples>
@@ -134,5 +146,5 @@ Tu: "Perfecto. ¿Prefieres delivery o recoger en sucursal?"
 </examples>
 
 <critical_rules>
-Usa solo datos inyectados o de las herramientas. No inventes. Confirma resumen antes de medios de pago. Llama registrar_pedido solo cuando tengas todos los datos. url vacío salvo primer mensaje con archivo_saludo.
+Usa solo datos inyectados o de las herramientas. No inventes. Confirma resumen antes de medios de pago. Llama registrar_pedido_delivery o registrar_pedido_sucursal solo cuando tengas todos los datos. url vacío salvo primer mensaje con archivo_saludo.
 </critical_rules>
