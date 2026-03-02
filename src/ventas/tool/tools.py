@@ -102,7 +102,7 @@ async def registrar_pedido_delivery(
     celular: int,
     medio_pago: str,
     monto_pagado: float,
-    email: str,
+    email: str = "",
     observacion: str = "",
     runtime: ToolRuntime = None,
 ) -> str:
@@ -110,8 +110,10 @@ async def registrar_pedido_delivery(
     Registra un pedido con envío a domicilio (Delivery).
 
     Úsala SOLO cuando el cliente eligió DELIVERY y tienes todos estos datos:
-    productos confirmados, número de operación del comprobante, tipo y costo
-    de envío según la zona, dirección de entrega, y datos del cliente.
+    productos con IDs, número de operación del comprobante, tipo y costo de
+    envío de la zona elegida, dirección de entrega, y datos del cliente
+    (nombre, DNI, celular, medio de pago, monto pagado). Si el cliente
+    proporcionó su email, inclúyelo.
 
     IMPORTANTE: No inventes IDs de producto. El id_catalogo debe ser el ID
     que devolvió search_productos_servicios. Si falta algún dato, pídelo
@@ -132,7 +134,7 @@ async def registrar_pedido_delivery(
         celular:                Teléfono del cliente (entero).
         medio_pago:             Medio de pago usado (ej. "yape", "transferencia").
         monto_pagado:           Monto pagado por el cliente.
-        email:                  Correo del cliente.
+        email:                  Correo del cliente (opcional).
         observacion:            Nota adicional (opcional).
         runtime:                Contexto automático inyectado por LangChain.
 
@@ -198,7 +200,7 @@ async def registrar_pedido_sucursal(
     celular: int,
     medio_pago: str,
     monto_pagado: float,
-    email: str,
+    email: str = "",
     observacion: str = "",
     runtime: ToolRuntime = None,
 ) -> str:
@@ -206,8 +208,10 @@ async def registrar_pedido_sucursal(
     Registra un pedido con recojo en sucursal.
 
     Úsala SOLO cuando el cliente eligió RECOGER EN SUCURSAL y tienes todos
-    estos datos: productos confirmados, número de operación del comprobante,
-    nombre exacto de la sucursal elegida, y datos del cliente.
+    estos datos: productos con IDs, número de operación del comprobante,
+    nombre exacto de la sucursal elegida, y datos del cliente (nombre, DNI,
+    celular, medio de pago, monto pagado). Si el cliente proporcionó su
+    email, inclúyelo.
 
     IMPORTANTE: No inventes IDs de producto. El id_catalogo debe ser el ID
     que devolvió search_productos_servicios. El nombre de la sucursal debe
@@ -224,7 +228,7 @@ async def registrar_pedido_sucursal(
         celular:     Teléfono del cliente (entero).
         medio_pago:  Medio de pago usado (ej. "yape", "transferencia").
         monto_pagado: Monto pagado por el cliente.
-        email:       Correo del cliente.
+        email:       Correo del cliente (opcional).
         observacion: Nota adicional (opcional).
         runtime:     Contexto automático inyectado por LangChain.
 
