@@ -32,11 +32,21 @@ ID_MONEDA_DEFAULT = 1
 
 
 def _to_int(val: Any, default: int = 0) -> int:
-    """Convierte a int para el payload (operacion, dni, celular, costo_envio, id_catalogo, cantidad)."""
+    """Convierte a int para el payload (operacion, dni, celular, id_catalogo, cantidad)."""
     if val is None or val == "":
         return default
     try:
         return int(float(val)) if isinstance(val, (int, float)) else int(str(val).strip())
+    except (ValueError, TypeError):
+        return default
+
+
+def _to_float(val: Any, default: float = 0.0) -> float:
+    """Convierte a float para el payload (costo_envio, monto_pagado)."""
+    if val is None or val == "":
+        return default
+    try:
+        return float(val)
     except (ValueError, TypeError):
         return default
 
@@ -101,7 +111,7 @@ async def registrar_pedido(
         "modalidad": modalidad,
         "tipo_envio": tipo_envio,
         "direccion": direccion,
-        "costo_envio": _to_int(costo_envio),
+        "costo_envio": _to_float(costo_envio),
         "observacion": observacion,
         "fecha_entrega_estimada": fecha_entrega_estimada,
         "nombre": nombre,
@@ -110,7 +120,7 @@ async def registrar_pedido(
         "email": email,
         "medio_pago": medio_pago,
         "sucursal": sucursal,
-        "monto_pagado": monto_pagado,
+        "monto_pagado": _to_float(monto_pagado),
     }
 
     logger.info(
