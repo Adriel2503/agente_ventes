@@ -21,6 +21,7 @@ from .config import (
     HTTP_RETRY_WAIT_MAX,
     CB_THRESHOLD,
     CB_RESET_TTL,
+    TIMEZONE,
 )
 
 __all__ = [
@@ -44,4 +45,5 @@ __all__ = [
     "HTTP_RETRY_WAIT_MAX",
     "CB_THRESHOLD",
     "CB_RESET_TTL",
+    "TIMEZONE",
 ]
