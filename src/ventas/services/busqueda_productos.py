@@ -23,14 +23,14 @@ try:
     from .. import config as app_config
     from ..logger import get_logger
     from ..metrics import SEARCH_CACHE
-    from .http_client import post_informacion
+    from .http_client import post_with_logging
     from .circuit_breaker import informacion_cb
     from ._resilience import resilient_call
 except ImportError:
     from ventas import config as app_config
     from ventas.logger import get_logger
     from ventas.metrics import SEARCH_CACHE
-    from ventas.services.http_client import post_informacion
+    from ventas.services.http_client import post_with_logging
     from ventas.services.circuit_breaker import informacion_cb
     from ventas.services._resilience import resilient_call
 
@@ -107,7 +107,7 @@ def format_productos_para_respuesta(productos: list[dict[str, Any]]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Llamada a la API (resilient_call + post_informacion)
+# Llamada a la API (resilient_call + post_with_logging)
 # ---------------------------------------------------------------------------
 
 async def _do_busqueda_api(
@@ -129,7 +129,7 @@ async def _do_busqueda_api(
 
     try:
         data = await resilient_call(
-            lambda: post_informacion(payload),
+            lambda: post_with_logging(app_config.API_INFORMACION_URL, payload),
             cb=informacion_cb,
             circuit_key=id_empresa,
             service_name="BUSQUEDA",

@@ -11,13 +11,13 @@ from cachetools import TTLCache
 try:
     from .. import config as app_config
     from ..logger import get_logger
-    from .http_client import get_client
+    from .http_client import post_with_logging
     from ._resilience import resilient_call
     from .circuit_breaker import preguntas_cb
 except ImportError:
     from ventas import config as app_config
     from ventas.logger import get_logger
-    from ventas.services.http_client import get_client
+    from ventas.services.http_client import post_with_logging
     from ventas.services._resilience import resilient_call
     from ventas.services.circuit_breaker import preguntas_cb
 
@@ -85,6 +85,8 @@ async def fetch_preguntas_frecuentes(id_chatbot: Any | None) -> str:
     if preguntas_cb.is_open(id_chatbot):
         return ""
 
+    payload = {"id_chatbot": id_chatbot}
+
     # Serializar fetch por id_chatbot (thundering herd prevention)
     lock = _fetch_locks.setdefault(id_chatbot, asyncio.Lock())
     async with lock:
@@ -93,21 +95,10 @@ async def fetch_preguntas_frecuentes(id_chatbot: Any | None) -> str:
             cached = _preguntas_cache[id_chatbot]
             return cached if cached else ""
 
-        payload = {"id_chatbot": id_chatbot}
-
-        async def _fetch() -> dict:
-            logger.debug("[PREGUNTAS_FRECUENTES] Obteniendo FAQs id_chatbot=%s", id_chatbot)
-            client = get_client()
-            response = await client.post(
-                app_config.API_PREGUNTAS_FRECUENTES_URL,
-                json=payload,
-            )
-            response.raise_for_status()
-            return response.json()
-
         try:
+            logger.debug("[PREGUNTAS_FRECUENTES] Obteniendo FAQs id_chatbot=%s", id_chatbot)
             data = await resilient_call(
-                _fetch,
+                lambda: post_with_logging(app_config.API_PREGUNTAS_FRECUENTES_URL, payload),
                 cb=preguntas_cb,
                 circuit_key=id_chatbot,
                 service_name="PREGUNTAS_FRECUENTES",

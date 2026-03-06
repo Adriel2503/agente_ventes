@@ -85,9 +85,12 @@ async def post_with_retry(url: str, json: dict[str, Any]) -> dict[str, Any]:
     return response.json()
 
 
-async def post_informacion(payload: dict[str, Any]) -> dict[str, Any]:
+async def post_with_logging(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     """
-    POST a ws_informacion_ia.php con logging DEBUG y retry automático (tenacity).
+    POST con logging DEBUG y retry automático (tenacity).
+
+    Wrapper genérico sobre post_with_retry: el caller pasa la URL.
+    Cada servicio es responsable de saber a qué endpoint llamar.
 
     Raises:
         httpx.HTTPStatusError: Si status code no 2xx
@@ -95,22 +98,25 @@ async def post_informacion(payload: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         Dict parseado del JSON de respuesta
+
+    ADVERTENCIA: usar solo en operaciones de LECTURA idempotentes.
+    Para escrituras (ej. REGISTRAR_PEDIDO) usar get_client().post() directamente.
     """
     cod_ope = payload.get("codOpe", "")
 
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(
-            "[API_INFORMACION] POST %s - %s",
-            app_config.API_INFORMACION_URL,
+            "[API] POST %s - %s",
+            url,
             json.dumps(payload, ensure_ascii=False),
         )
 
     try:
-        data = await post_with_retry(app_config.API_INFORMACION_URL, payload)
+        data = await post_with_retry(url, payload)
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                "[API_INFORMACION] Response (codOpe=%s): %s",
+                "[API] Response (codOpe=%s): %s",
                 cod_ope,
                 json.dumps(data, ensure_ascii=False),
             )
@@ -119,7 +125,7 @@ async def post_informacion(payload: dict[str, Any]) -> dict[str, Any]:
 
     except (httpx.HTTPStatusError, httpx.TransportError) as e:
         logger.warning(
-            "[API_INFORMACION] %s (codOpe=%s): %s",
+            "[API] %s (codOpe=%s): %s",
             type(e).__name__,
             cod_ope,
             e,
@@ -127,11 +133,11 @@ async def post_informacion(payload: dict[str, Any]) -> dict[str, Any]:
         raise
     except Exception as e:
         logger.error(
-            "[API_INFORMACION] Error inesperado (codOpe=%s): %s: %s",
+            "[API] Error inesperado (codOpe=%s): %s: %s",
             cod_ope, type(e).__name__, e,
             exc_info=True,
         )
         raise
 
 
-__all__ = ["get_client", "close_http_client", "post_with_retry", "post_informacion"]
+__all__ = ["get_client", "close_http_client", "post_with_retry", "post_with_logging"]

@@ -8,7 +8,7 @@ Uso:
     from .circuit_breaker import informacion_cb
 
     data = await resilient_call(
-        lambda: post_informacion(payload),
+        lambda: post_with_logging(app_config.API_INFORMACION_URL, payload),
         cb=informacion_cb,
         circuit_key=id_empresa,
         service_name="MI_SERVICIO",
