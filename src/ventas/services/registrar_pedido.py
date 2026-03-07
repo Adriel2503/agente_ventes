@@ -55,7 +55,7 @@ def _to_float(val: Any, default: float = 0.0) -> float:
 async def registrar_pedido(
     id_empresa: int,
     id_prospecto: int,
-    productos: list[dict[str, int, Any]],
+    productos: list[dict[str, Any]],
     operacion: str,
     modalidad: str,
     nombre: str,
