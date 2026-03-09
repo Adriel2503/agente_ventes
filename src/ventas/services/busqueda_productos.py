@@ -22,9 +22,7 @@ from cachetools import TTLCache
 from .. import config as app_config
 from ..logger import get_logger
 from ..metrics import SEARCH_CACHE
-from .http_client import post_with_logging
-from .circuit_breaker import informacion_cb
-from ._resilience import resilient_call
+from ..infra import post_with_logging, informacion_cb, resilient_call
 
 logger = get_logger(__name__)
 

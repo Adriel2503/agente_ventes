@@ -14,12 +14,12 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ... import config as app_config
 from ...logger import get_logger
-from ...services.categorias import obtener_categorias
-from ...services.contexto_negocio import fetch_contexto_negocio
-from ...services.costo_envio import obtener_costos_envio
-from ...services.metodos_pago import obtener_metodos_pago
-from ...services.preguntas_frecuentes import fetch_preguntas_frecuentes
-from ...services.sucursales import obtener_sucursales
+from ...services.prompt_data.categorias import obtener_categorias
+from ...services.prompt_data.contexto_negocio import fetch_contexto_negocio
+from ...services.prompt_data.costo_envio import obtener_costos_envio
+from ...services.prompt_data.metodos_pago import obtener_metodos_pago
+from ...services.prompt_data.preguntas_frecuentes import fetch_preguntas_frecuentes
+from ...services.prompt_data.sucursales import obtener_sucursales
 
 logger = get_logger(__name__)
 

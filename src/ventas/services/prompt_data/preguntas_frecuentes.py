@@ -8,11 +8,9 @@ from typing import Any
 
 from cachetools import TTLCache
 
-from .. import config as app_config
-from ..logger import get_logger
-from .http_client import post_with_logging
-from ._resilience import resilient_call
-from .circuit_breaker import preguntas_cb
+from ... import config as app_config
+from ...logger import get_logger
+from ...infra import post_with_logging, resilient_call, preguntas_cb
 
 logger = get_logger(__name__)
 

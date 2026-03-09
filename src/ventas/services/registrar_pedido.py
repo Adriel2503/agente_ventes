@@ -19,7 +19,7 @@ from typing import Any
 
 from .. import config as app_config
 from ..logger import get_logger
-from .http_client import get_client
+from ..infra import get_client
 
 logger = get_logger(__name__)
 
