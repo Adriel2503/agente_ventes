@@ -10,16 +10,10 @@ from typing import Any, TypedDict
 
 from langchain.tools import tool, ToolRuntime
 
-try:
-    from ..logger import get_logger
-    from ..metrics import TOOL_CALLS
-    from ..services.busqueda_productos import buscar_productos_servicios, format_productos_para_respuesta
-    from ..services.registrar_pedido import registrar_pedido as _svc_registrar_pedido
-except ImportError:
-    from ventas.logger import get_logger
-    from ventas.metrics import TOOL_CALLS
-    from ventas.services.busqueda_productos import buscar_productos_servicios, format_productos_para_respuesta
-    from ventas.services.registrar_pedido import registrar_pedido as _svc_registrar_pedido
+from ..logger import get_logger
+from ..metrics import TOOL_CALLS
+from ..services.busqueda_productos import buscar_productos_servicios, format_productos_para_respuesta
+from ..services.registrar_pedido import registrar_pedido as _svc_registrar_pedido
 
 logger = get_logger(__name__)
 

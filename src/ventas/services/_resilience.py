@@ -22,10 +22,7 @@ import httpx
 
 from .circuit_breaker import CircuitBreaker
 
-try:
-    from ..logger import get_logger
-except ImportError:
-    from ventas.logger import get_logger
+from ..logger import get_logger
 
 logger = get_logger(__name__)
 

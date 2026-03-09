@@ -12,24 +12,14 @@ from zoneinfo import ZoneInfo
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-try:
-    from .. import config as app_config
-    from ..logger import get_logger
-    from ..services.categorias import obtener_categorias
-    from ..services.contexto_negocio import fetch_contexto_negocio
-    from ..services.costo_envio import obtener_costos_envio
-    from ..services.metodos_pago import obtener_metodos_pago
-    from ..services.preguntas_frecuentes import fetch_preguntas_frecuentes
-    from ..services.sucursales import obtener_sucursales
-except ImportError:
-    from ventas import config as app_config
-    from ventas.logger import get_logger
-    from ventas.services.categorias import obtener_categorias
-    from ventas.services.contexto_negocio import fetch_contexto_negocio
-    from ventas.services.costo_envio import obtener_costos_envio
-    from ventas.services.metodos_pago import obtener_metodos_pago
-    from ventas.services.preguntas_frecuentes import fetch_preguntas_frecuentes
-    from ventas.services.sucursales import obtener_sucursales
+from ... import config as app_config
+from ...logger import get_logger
+from ...services.categorias import obtener_categorias
+from ...services.contexto_negocio import fetch_contexto_negocio
+from ...services.costo_envio import obtener_costos_envio
+from ...services.metodos_pago import obtener_metodos_pago
+from ...services.preguntas_frecuentes import fetch_preguntas_frecuentes
+from ...services.sucursales import obtener_sucursales
 
 logger = get_logger(__name__)
 

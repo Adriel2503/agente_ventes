@@ -8,18 +8,11 @@ from typing import Any
 
 from cachetools import TTLCache
 
-try:
-    from .. import config as app_config
-    from ..logger import get_logger
-    from .http_client import post_with_logging
-    from ._resilience import resilient_call
-    from .circuit_breaker import informacion_cb
-except ImportError:
-    from ventas import config as app_config
-    from ventas.logger import get_logger
-    from ventas.services.http_client import post_with_logging
-    from ventas.services._resilience import resilient_call
-    from ventas.services.circuit_breaker import informacion_cb
+from .. import config as app_config
+from ..logger import get_logger
+from .http_client import post_with_logging
+from ._resilience import resilient_call
+from .circuit_breaker import informacion_cb
 
 logger = get_logger(__name__)
 

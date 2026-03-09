@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ventas"
+version = "2.5.0"
+requires-python = ">=3.12"
+dependencies = [
+    # --- Web server ---
+    "fastapi==0.135.1",              # Framework HTTP ASGI (POST /api/chat, GET /health)
+    "uvicorn[standard]==0.41.0",     # Servidor ASGI (producción)
+    "pydantic==2.12.5",              # Validación de request/response y schemas de pedido
+
+    # --- Agente LLM ---
+    "openai==2.26.0",                # Error types (AuthenticationError, RateLimitError, etc.)
+    "langchain==1.2.10",             # create_agent, @tool, ToolRuntime, wrap_model_call
+    "langchain-core==1.2.17",        # trim_messages, BaseMessage
+    "langchain-openai==1.1.10",      # init_chat_model("openai:gpt-4o-mini")
+    "langgraph==1.0.10",             # Grafo del agente, flujo de mensajes
+    "langgraph-checkpoint==4.0.1",   # InMemorySaver (checkpointer conversacional)
+
+    # --- HTTP y resiliencia ---
+    "httpx==0.28.1",                 # Cliente async para APIs externas (MaravIA PHP)
+    "tenacity==9.1.4",               # Retry con backoff exponencial en post_with_logging
+
+    # --- Configuración y templates ---
+    "python-dotenv==1.2.2",          # Carga de .env en config.py
+    "jinja2==3.1.6",                 # System prompt dinámico (ventas_system.j2)
+
+    # --- Observabilidad y caché ---
+    "prometheus-client==0.24.1",     # Métricas en /metrics (Prometheus/Grafana)
+    "cachetools==7.0.3",             # TTLCache para agentes, búsquedas, contexto, categorías
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ventas"]

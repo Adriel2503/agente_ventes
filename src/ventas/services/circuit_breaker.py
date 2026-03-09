@@ -18,12 +18,8 @@ from typing import Any
 
 from cachetools import TTLCache
 
-try:
-    from ..logger import get_logger
-    from .. import config as app_config
-except ImportError:
-    from ventas.logger import get_logger
-    from ventas import config as app_config
+from .. import config as app_config
+from ..logger import get_logger
 
 logger = get_logger(__name__)
 

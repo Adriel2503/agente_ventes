@@ -19,16 +19,16 @@ RUN adduser \
     --uid "${UID}" \
     appuser
 
-# Dependencias primero (mejor uso de caché)
-COPY requirements.txt .
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir -r requirements.txt
+# Instalar uv (gestor de paquetes rápido)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Instalar paquete (pyproject.toml + src/)
+COPY pyproject.toml .
+COPY src ./src
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system .
 
 USER appuser
-
-# Código de la aplicación
-COPY src ./src
-ENV PYTHONPATH=/app/src
 
 EXPOSE 8001
 

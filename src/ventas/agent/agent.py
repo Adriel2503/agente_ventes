@@ -25,18 +25,11 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from pydantic import BaseModel
 
-try:
-    from .. import config as app_config
-    from ..tool.tools import AGENT_TOOLS
-    from ..logger import get_logger
-    from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, chat_requests_total, record_chat_error
-    from ..prompts import build_ventas_system_prompt
-except ImportError:
-    from ventas import config as app_config
-    from ventas.tool.tools import AGENT_TOOLS
-    from ventas.logger import get_logger
-    from ventas.metrics import AGENT_CACHE, track_chat_response, track_llm_call, chat_requests_total, record_chat_error
-    from ventas.prompts import build_ventas_system_prompt
+from .. import config as app_config
+from ..tool.tools import AGENT_TOOLS
+from ..logger import get_logger
+from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, chat_requests_total, record_chat_error
+from .prompts import build_ventas_system_prompt
 
 logger = get_logger(__name__)
 

@@ -17,14 +17,9 @@ Campos del payload:
 import json
 from typing import Any
 
-try:
-    from .. import config as app_config
-    from ..logger import get_logger
-    from .http_client import get_client
-except ImportError:
-    from ventas import config as app_config
-    from ventas.logger import get_logger
-    from ventas.services.http_client import get_client
+from .. import config as app_config
+from ..logger import get_logger
+from .http_client import get_client
 
 logger = get_logger(__name__)
 

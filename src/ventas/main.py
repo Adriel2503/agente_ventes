@@ -17,20 +17,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from prometheus_client import make_asgi_app
 
-try:
-    from . import config as app_config
-    from .agent import process_venta_message
-    from .logger import setup_logging, get_logger
-    from .metrics import initialize_agent_info, HTTP_REQUESTS, HTTP_DURATION
-    from .services.http_client import close_http_client
-    from .services.circuit_breaker import informacion_cb, preguntas_cb
-except ImportError:
-    from ventas import config as app_config
-    from ventas.agent import process_venta_message
-    from ventas.logger import setup_logging, get_logger
-    from ventas.metrics import initialize_agent_info, HTTP_REQUESTS, HTTP_DURATION
-    from ventas.services.http_client import close_http_client
-    from ventas.services.circuit_breaker import informacion_cb, preguntas_cb
+from . import config as app_config
+from .agent import process_venta_message
+from .logger import setup_logging, get_logger
+from .metrics import initialize_agent_info, HTTP_REQUESTS, HTTP_DURATION
+from .services.http_client import close_http_client
+from .services.circuit_breaker import informacion_cb, preguntas_cb
 
 # Configurar logging antes de cualquier otra cosa
 log_level = getattr(logging, app_config.LOG_LEVEL.upper(), logging.INFO)
