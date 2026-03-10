@@ -6,7 +6,7 @@ Incluye:
   - registrar_pedido_sucursal: registra pedido con recojo en sucursal
 """
 
-from typing import Any, TypedDict
+from typing import TypedDict
 
 from langchain.tools import tool, ToolRuntime
 

@@ -5,12 +5,10 @@ El retry ya lo maneja tenacity en post_with_retry (http_client.py).
 Este módulo solo se ocupa de verificar/actualizar el estado del CB.
 
 Uso:
-    from .circuit_breaker import informacion_cb
-
     data = await resilient_call(
-        lambda: post_with_logging(app_config.API_INFORMACION_URL, payload),
-        cb=informacion_cb,
-        circuit_key=id_empresa,
+        lambda: post_with_logging(url, payload),
+        cb=my_circuit_breaker,
+        circuit_key=some_key,
         service_name="MI_SERVICIO",
     )
     # Lanza RuntimeError si circuit abierto, o la excepción original si la llamada falla.
@@ -21,7 +19,6 @@ from typing import Any, Awaitable, Callable
 import httpx
 
 from .circuit_breaker import CircuitBreaker
-
 from ..logger import get_logger
 
 logger = get_logger(__name__)
@@ -56,7 +53,7 @@ async def resilient_call(
         Exception: cualquier otro error de la coroutine (CB no afectado).
     """
     if cb.is_open(circuit_key):
-        logger.warning(
+        logger.debug(
             "[%s] Circuit ABIERTO key=%s — llamada rechazada sin tocar la red",
             service_name, circuit_key,
         )
@@ -69,14 +66,12 @@ async def resilient_call(
         cb.record_success(circuit_key)
         return result
     except httpx.TransportError as exc:
-        logger.warning(
+        # Solo TransportError afecta el CB; otros errores se propagan sin tocarlo.
+        logger.debug(
             "[%s] TransportError key=%s: %s",
             service_name, circuit_key, exc,
         )
         cb.record_failure(circuit_key)
-        raise
-    except Exception:
-        # HTTPStatusError, errores de negocio, etc. no afectan el circuit breaker.
         raise
 
 

@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from .. import config as app_config
 from ..tool.tools import AGENT_TOOLS
 from ..logger import get_logger
-from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, chat_requests_total, record_chat_error
+from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, CHAT_REQUESTS, record_chat_error
 from .prompts import build_ventas_system_prompt
 
 logger = get_logger(__name__)
@@ -285,7 +285,7 @@ async def process_venta_message(
     _empresa_id = str(config_data.get("id_empresa", "unknown"))
 
     # Registrar request por empresa
-    chat_requests_total.labels(empresa_id=_empresa_id).inc()
+    CHAT_REQUESTS.labels(empresa_id=_empresa_id).inc()
 
     try:
         agent = await _get_agent(config_data)

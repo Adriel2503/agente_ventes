@@ -60,7 +60,7 @@ LLM_DURATION = Histogram(
     buckets=[0.5, 1, 2, 5, 10, 20, 30, 60, 90],
 )
 
-chat_response_duration_seconds = Histogram(
+CHAT_RESPONSE_DURATION = Histogram(
     "ventas_chat_response_duration_seconds",
     "Latencia total del procesamiento de mensaje (lock + ainvoke + resultado)",
     ["status"],  # success | error
@@ -102,33 +102,16 @@ SEARCH_CACHE = Counter(
 # Por empresa (como agent_citas)
 # ---------------------------------------------------------------------------
 
-chat_requests_total = Counter(
+CHAT_REQUESTS = Counter(
     "ventas_chat_requests_total",
     "Total de requests de chat por empresa",
     ["empresa_id"],
 )
 
-chat_errors_total = Counter(
+CHAT_ERRORS = Counter(
     "ventas_chat_errors_total",
     "Total de errores de chat por tipo",
     ["error_type"],
-)
-
-# ---------------------------------------------------------------------------
-# API calls por endpoint
-# ---------------------------------------------------------------------------
-
-API_CALLS = Counter(
-    "ventas_api_calls_total",
-    "Total de llamadas a APIs externas por endpoint y estado",
-    ["endpoint", "status"],
-)
-
-api_call_duration = Histogram(
-    "ventas_api_call_duration_seconds",
-    "Latencia de llamadas a APIs externas por endpoint",
-    ["endpoint"],
-    buckets=[0.1, 0.25, 0.5, 1, 2.5, 5, 10],
 )
 
 
@@ -147,7 +130,7 @@ def track_chat_response():
         status = "error"
         raise
     finally:
-        chat_response_duration_seconds.labels(status=status).observe(time.perf_counter() - start)
+        CHAT_RESPONSE_DURATION.labels(status=status).observe(time.perf_counter() - start)
 
 
 @contextmanager
@@ -165,37 +148,9 @@ def track_llm_call():
         LLM_DURATION.observe(time.perf_counter() - start)
 
 
-@contextmanager
-def track_tool_execution(tool_name: str):
-    """Context manager para medir la duración de ejecución de una tool."""
-    status = "ok"
-    try:
-        yield
-    except Exception:
-        status = "error"
-        raise
-    finally:
-        TOOL_CALLS.labels(tool=tool_name, status=status).inc()
-
-
-@contextmanager
-def track_api_call(endpoint: str):
-    """Context manager para medir la duración de una llamada a API externa."""
-    status = "ok"
-    start = time.perf_counter()
-    try:
-        yield
-    except Exception:
-        status = "error"
-        raise
-    finally:
-        API_CALLS.labels(endpoint=endpoint, status=status).inc()
-        api_call_duration.labels(endpoint=endpoint).observe(time.perf_counter() - start)
-
-
 def record_chat_error(error_type: str) -> None:
     """Registra un error de chat por tipo."""
-    chat_errors_total.labels(error_type=error_type).inc()
+    CHAT_ERRORS.labels(error_type=error_type).inc()
 
 
 __all__ = [
@@ -205,17 +160,13 @@ __all__ = [
     "HTTP_DURATION",
     "LLM_REQUESTS",
     "LLM_DURATION",
-    "chat_response_duration_seconds",
+    "CHAT_RESPONSE_DURATION",
     "AGENT_CACHE",
     "TOOL_CALLS",
     "SEARCH_CACHE",
-    "chat_requests_total",
-    "chat_errors_total",
-    "API_CALLS",
-    "api_call_duration",
+    "CHAT_REQUESTS",
+    "CHAT_ERRORS",
     "track_chat_response",
     "track_llm_call",
-    "track_tool_execution",
-    "track_api_call",
     "record_chat_error",
 ]

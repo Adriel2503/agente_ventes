@@ -17,11 +17,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from prometheus_client import make_asgi_app
 
-from . import config as app_config
+from . import config as app_config, __version__
 from .agent import process_venta_message
 from .logger import setup_logging, get_logger
 from .metrics import initialize_agent_info, HTTP_REQUESTS, HTTP_DURATION
-from .infra import close_http_client, informacion_cb, preguntas_cb
+from .infra import close_http_client
+from .config import informacion_cb, preguntas_cb
 
 # Configurar logging antes de cualquier otra cosa
 log_level = getattr(logging, app_config.LOG_LEVEL.upper(), logging.INFO)
@@ -33,7 +34,7 @@ setup_logging(
 logger = get_logger(__name__)
 
 # Inicializar información del agente para métricas
-initialize_agent_info(model=app_config.OPENAI_MODEL, version="2.0.0")
+initialize_agent_info(model=app_config.OPENAI_MODEL, version=__version__)
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +72,7 @@ app = FastAPI(
     lifespan=app_lifespan,
     title="Agente Ventas - MaravIA",
     description="Servicio de agente especializado en venta directa por chat",
-    version="2.0.0",
+    version=__version__,
 )
 
 # Endpoint de métricas para Prometheus
@@ -176,7 +177,7 @@ async def health():
     status = "degraded" if issues else "ok"
     return JSONResponse(
         status_code=503 if issues else 200,
-        content={"status": status, "agent": "ventas", "version": "2.0.0", "issues": issues},
+        content={"status": status, "agent": "ventas", "version": __version__, "issues": issues},
     )
 
 

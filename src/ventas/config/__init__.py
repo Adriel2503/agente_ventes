@@ -1,4 +1,4 @@
-"""Re-exporta la configuración del agente de ventas (env, timeouts, URLs de API MaravIA)."""
+"""Re-exporta la configuración del agente de ventas (env, timeouts, URLs, circuit breakers)."""
 
 from .config import (
     API_INFORMACION_URL,
@@ -23,6 +23,7 @@ from .config import (
     CB_RESET_TTL,
     TIMEZONE,
 )
+from .circuit_breakers import informacion_cb, preguntas_cb
 
 __all__ = [
     "API_INFORMACION_URL",
@@ -46,4 +47,6 @@ __all__ = [
     "CB_THRESHOLD",
     "CB_RESET_TTL",
     "TIMEZONE",
+    "informacion_cb",
+    "preguntas_cb",
 ]

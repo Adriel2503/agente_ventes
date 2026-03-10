@@ -10,7 +10,8 @@ from cachetools import TTLCache
 
 from ... import config as app_config
 from ...logger import get_logger
-from ...infra import post_with_logging, resilient_call, preguntas_cb
+from ...infra import post_with_logging, resilient_call
+from ...config import preguntas_cb
 
 logger = get_logger(__name__)
 

@@ -61,7 +61,7 @@ async def close_http_client() -> None:
     retry=retry_if_exception_type(httpx.TransportError),
     reraise=True,
 )
-async def post_with_retry(url: str, json: dict[str, Any]) -> dict[str, Any]:
+async def post_with_retry(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     """
     POST con retry automático para errores de red transitoria.
 
@@ -76,7 +76,7 @@ async def post_with_retry(url: str, json: dict[str, Any]) -> dict[str, Any]:
     ADVERTENCIA: usar solo en operaciones de LECTURA idempotentes.
     """
     client = get_client()
-    response = await client.post(url, json=json)
+    response = await client.post(url, json=payload)
     response.raise_for_status()
     return response.json()
 
@@ -98,8 +98,6 @@ async def post_with_logging(url: str, payload: dict[str, Any]) -> dict[str, Any]
     ADVERTENCIA: usar solo en operaciones de LECTURA idempotentes.
     Para escrituras (ej. REGISTRAR_PEDIDO) usar get_client().post() directamente.
     """
-    cod_ope = payload.get("codOpe", "")
-
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(
             "[API] POST %s - %s",
@@ -112,25 +110,20 @@ async def post_with_logging(url: str, payload: dict[str, Any]) -> dict[str, Any]
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                "[API] Response (codOpe=%s): %s",
-                cod_ope,
+                "[API] Response %s: %s",
+                url,
                 json.dumps(data, ensure_ascii=False),
             )
 
         return data
 
     except (httpx.HTTPStatusError, httpx.TransportError) as e:
-        logger.warning(
-            "[API] %s (codOpe=%s): %s",
-            type(e).__name__,
-            cod_ope,
-            e,
-        )
+        logger.debug("[API] %s %s: %s", type(e).__name__, url, e)
         raise
     except Exception as e:
         logger.error(
-            "[API] Error inesperado (codOpe=%s): %s: %s",
-            cod_ope, type(e).__name__, e,
+            "[API] Error inesperado %s: %s: %s",
+            url, type(e).__name__, e,
             exc_info=True,
         )
         raise

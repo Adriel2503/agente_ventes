@@ -33,8 +33,7 @@ load_dotenv(_find_env_path())
 
 def _get_str(key: str, default: str) -> str:
     """Obtiene variable de entorno como string."""
-    value = os.getenv(key, default)
-    return value.strip() if isinstance(value, str) else str(default)
+    return os.getenv(key, default).strip()
 
 
 def _get_int(
