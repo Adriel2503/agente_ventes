@@ -44,7 +44,7 @@ initialize_agent_info(model=app_config.OPENAI_MODEL, version=__version__)
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4096)
     session_id: int
-    context: dict[str, Any] | None = None
+    config: dict[str, Any] | None = None
 
 
 class ChatResponse(BaseModel):
@@ -98,23 +98,23 @@ async def chat(req: ChatRequest) -> ChatResponse:
     Body:
         message: Mensaje del cliente
         session_id: ID de sesión (int, unificado con gateway)
-        context: Contexto con config:
-            - config.id_empresa (int, requerido)
-            - config.id_chatbot (int, opcional): para FAQs
-            - config.nombre_bot (str, opcional): nombre del asistente
-            - config.personalidad (str, opcional)
-            - config.nombre_negocio (str, opcional)
-            - config.propuesta_valor (str, opcional)
-            - config.medios_pago (str, opcional)
+        config: Configuración de la empresa:
+            - id_empresa (int, requerido)
+            - id_chatbot (int, opcional): para FAQs
+            - nombre_bot (str, opcional): nombre del asistente
+            - personalidad (str, opcional)
+            - nombre_negocio (str, opcional)
+            - propuesta_valor (str, opcional)
+            - medios_pago (str, opcional)
 
     Returns:
         JSON con campo reply (texto del agente) y url (opcional, ej. video/imagen de saludo)
     """
-    context = req.context or {}
+    config = req.config or {}
 
     logger.info("[HTTP] Mensaje recibido - Session: %s, Length: %s chars", req.session_id, len(req.message))
     logger.debug("[HTTP] Message: %s...", req.message[:100])
-    logger.debug("[HTTP] Context keys: %s", list(context.keys()))
+    logger.debug("[HTTP] Config keys: %s", list(config.keys()))
 
     _start = time.perf_counter()
     _http_status = "success"
@@ -124,7 +124,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
             process_venta_message(
                 message=req.message,
                 session_id=req.session_id,
-                context=context,
+                config=config,
             ),
             timeout=app_config.CHAT_TIMEOUT,
         )

@@ -116,13 +116,12 @@ def _cleanup_stale_session_locks(current_session_id: int) -> None:
 # Helpers internos
 # ---------------------------------------------------------------------------
 
-def _validate_context(context: dict[str, Any]) -> None:
-    config_data = context.get("config", {})
+def _validate_config(config: dict[str, Any]) -> None:
     required_keys = ["id_empresa"]
-    missing = [k for k in required_keys if k not in config_data or config_data[k] is None]
+    missing = [k for k in required_keys if k not in config or config[k] is None]
     if missing:
-        raise ValueError(f"Context missing required keys in config: {missing}")
-    logger.debug("[AGENT] Context validated: id_empresa=%s", config_data.get("id_empresa"))
+        raise ValueError(f"Config missing required keys: {missing}")
+    logger.debug("[AGENT] Config validated: id_empresa=%s", config.get("id_empresa"))
 
 
 def _get_model():
@@ -204,10 +203,9 @@ async def _get_agent(config: dict[str, Any]):
         _agent_cache_locks.pop(cache_key, None)
 
 
-def _prepare_agent_context(context: dict[str, Any], session_id: int) -> AgentContext:
-    config_data = context.get("config", {})
+def _prepare_agent_context(config: dict[str, Any], session_id: int) -> AgentContext:
     return AgentContext(
-        id_empresa=config_data["id_empresa"],
+        id_empresa=config["id_empresa"],
         session_id=session_id,
     )
 
@@ -250,7 +248,7 @@ def _build_content(message: str) -> str | list[dict]:
 async def process_venta_message(
     message: str,
     session_id: int,
-    context: dict[str, Any],
+    config: dict[str, Any],
 ) -> tuple[str, str | None]:
     """
     Procesa un mensaje del cliente sobre ventas usando el agente LangChain.
@@ -263,7 +261,7 @@ async def process_venta_message(
     Args:
         message: Mensaje del cliente
         session_id: ID estable del usuario (viene del gateway)
-        context: Contexto con config (id_empresa, nombre_negocio, personalidad, etc.)
+        config: Configuración de la empresa (id_empresa, nombre_negocio, personalidad, etc.)
 
     Returns:
         Tupla (reply, url). url es None cuando no hay medio que adjuntar.
@@ -275,13 +273,13 @@ async def process_venta_message(
         raise ValueError("session_id es requerido (entero no negativo)")
 
     try:
-        _validate_context(context)
+        _validate_config(config)
     except ValueError as e:
-        logger.error("[AGENT] Error de contexto: %s", e)
-        record_chat_error("context_error")
+        logger.error("[AGENT] Error de config: %s", e)
+        record_chat_error("config_error")
         return (f"Error de configuración: {str(e)}", None)
 
-    config_data = dict(context.get("config", {}))
+    config_data = dict(config)
     _empresa_id = str(config_data.get("id_empresa", "unknown"))
 
     # Registrar request por empresa
@@ -294,8 +292,8 @@ async def process_venta_message(
         record_chat_error("agent_creation_error")
         return ("Disculpa, tuve un problema de configuración. ¿Podrías intentar nuevamente?", None)
 
-    agent_context = _prepare_agent_context(context, session_id)
-    langgraph_config = {"configurable": {"thread_id": str(session_id)}}
+    agent_context = _prepare_agent_context(config_data, session_id)
+    run_config = {"configurable": {"thread_id": str(session_id)}}
 
     # Session lock: serializa requests concurrentes del mismo usuario
     _cleanup_stale_session_locks(session_id)
@@ -309,7 +307,7 @@ async def process_venta_message(
                 with track_llm_call():
                     result = await agent.ainvoke(
                         {"messages": [{"role": "user", "content": _build_content(message)}]},
-                        config=langgraph_config,
+                        config=run_config,
                         context=agent_context,
                     )
 

@@ -14,7 +14,7 @@ from prometheus_client import Counter, Histogram, Info
 # ---------------------------------------------------------------------------
 
 agent_info = Info(
-    "agent_ventas_info",
+    "ventas_info",
     "Información del servicio de ventas",
 )
 
