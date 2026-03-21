@@ -32,6 +32,7 @@ from ..tool.tools import AGENT_TOOLS
 from ..logger import get_logger
 from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, CHAT_REQUESTS, record_chat_error
 from .prompts import build_ventas_system_prompt
+from .middleware import message_window
 
 logger = get_logger(__name__)
 
@@ -206,6 +207,7 @@ async def _build_agent_for_empresa(id_empresa: int, config: dict[str, Any]):
         system_prompt=system_prompt,
         checkpointer=get_checkpointer(),
         response_format=VentasStructuredResponse,
+        middleware=[message_window],
     )
     logger.info(
         "[AGENT] Agente listo para id_empresa=%s (tools=%s, TTL=%s min)",

@@ -166,6 +166,13 @@ MAX_CONCURRENT_AGENT: int = _get_int("MAX_CONCURRENT_AGENT", 50, min_val=5, max_
 
 
 # ---------------------------------------------------------------------------
+# Ventana de mensajes (limita el historial enviado al LLM por llamada)
+# ---------------------------------------------------------------------------
+
+MAX_MESSAGES_HISTORY: int = _get_int("MAX_MESSAGES_HISTORY", 20, min_val=4, max_val=200)
+
+
+# ---------------------------------------------------------------------------
 # Zona horaria
 # ---------------------------------------------------------------------------
 

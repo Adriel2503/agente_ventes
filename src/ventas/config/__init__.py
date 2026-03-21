@@ -22,6 +22,7 @@ from .config import (
     CB_THRESHOLD,
     CB_RESET_TTL,
     MAX_CONCURRENT_AGENT,
+    MAX_MESSAGES_HISTORY,
     TIMEZONE,
 )
 from .circuit_breakers import informacion_cb, preguntas_cb
@@ -48,6 +49,7 @@ __all__ = [
     "CB_THRESHOLD",
     "CB_RESET_TTL",
     "MAX_CONCURRENT_AGENT",
+    "MAX_MESSAGES_HISTORY",
     "TIMEZONE",
     "informacion_cb",
     "preguntas_cb",
