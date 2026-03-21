@@ -1,38 +1,26 @@
 """
 Lógica del agente especializado en venta directa usando LangChain 1.2+ API moderna.
-
-Diseño de cache:
-  - _model: singleton del cliente LLM, creado una sola vez al arrancar.
-  - _agent_cache: TTLCache keyed by id_empresa. Un agente por empresa sirve a
-    todos los usuarios usando distintos thread_ids en el checkpointer
-    (InMemorySaver). TTL configurable vía AGENT_CACHE_TTL_MINUTES.
-  - _agent_cache_locks: Lock por cache_key para anti-thundering herd (patrón agent_citas).
-    Si N requests llegan en cache miss simultáneo para la misma empresa,
-    serializan via lock; solo el primero construye, los demás hacen double-check.
-  - _session_locks: Lock por session_id para serializar requests concurrentes del
-    mismo usuario (evita race conditions en el checkpointer LangGraph).
 """
 
 import asyncio
-import re
-from dataclasses import dataclass
-
-import openai
 from typing import Any
 
-from cachetools import TTLCache
+import openai
 from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
-from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
-from pydantic import BaseModel
 
 from .. import config as app_config
 from ..tool.tools import AGENT_TOOLS
 from ..logger import get_logger
 from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, CHAT_REQUESTS, record_chat_error
 from .prompts import build_ventas_system_prompt
-from .middleware import message_window
+from .content import VentasStructuredResponse, _build_content
+from .context import _prepare_agent_context
+from .runtime import (
+    get_model, get_checkpointer,
+    get_cached_agent, cache_agent, agent_cache_ttl,
+    acquire_agent_lock, release_agent_lock, acquire_session_lock,
+    message_window,
+)
 
 logger = get_logger(__name__)
 
@@ -49,119 +37,6 @@ _OPENAI_ERRORS: dict[type, tuple[str, str, str, str]] = {
 _semaphore = asyncio.Semaphore(app_config.MAX_CONCURRENT_AGENT)
 
 
-class VentasStructuredResponse(BaseModel):
-    """Schema para response_format. reply obligatorio; url opcional (ej. video/imagen de saludo)."""
-
-    reply: str
-    url: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# Singletons de módulo
-# ---------------------------------------------------------------------------
-
-_checkpointer = None
-
-
-def _make_memory_saver() -> InMemorySaver:
-    """Crea InMemorySaver con allowlist para VentasStructuredResponse."""
-    return InMemorySaver(
-        serde=JsonPlusSerializer(
-            allowed_msgpack_modules=[("ventas.agent.agent", "VentasStructuredResponse")]
-        )
-    )
-
-
-async def init_checkpointer() -> None:
-    """Inicializa el checkpointer. Llamar en lifespan startup."""
-    global _checkpointer
-    _checkpointer = _make_memory_saver()
-    logger.info("[AGENT] Checkpointer: InMemorySaver")
-
-
-def get_checkpointer():
-    """Retorna el checkpointer singleton. Lanza si no está inicializado."""
-    if _checkpointer is None:
-        raise RuntimeError(
-            "Checkpointer no inicializado. Llamar await init_checkpointer() primero."
-        )
-    return _checkpointer
-
-
-async def close_checkpointer() -> None:
-    """Cierra el checkpointer al apagar la app."""
-    global _checkpointer
-    if _checkpointer is None:
-        return
-    if hasattr(_checkpointer, "__aexit__"):
-        try:
-            await _checkpointer.__aexit__(None, None, None)
-            logger.info("[AGENT] Checkpointer cerrado correctamente")
-        except Exception as e:
-            logger.warning("[AGENT] Error cerrando checkpointer: %s", e)
-    _checkpointer = None
-
-# Modelo LLM: una sola instancia para todo el proceso.
-# init_chat_model es síncrono; no hay riesgo de race condition en asyncio.
-_model = None
-
-# Cache de agentes: id_empresa → instancia de agente.
-# Tamaño y TTL configurables sin redeployar (AGENT_CACHE_MAXSIZE, AGENT_CACHE_TTL_MINUTES).
-_agent_cache: TTLCache = TTLCache(
-    maxsize=app_config.AGENT_CACHE_MAXSIZE,
-    ttl=app_config.AGENT_CACHE_TTL_MINUTES * 60,
-)
-
-# Lock por cache_key para anti-thundering herd en construcción de agente.
-# Limpiado en finally de _get_agent → no acumula entradas.
-_agent_cache_locks: dict[int, asyncio.Lock] = {}
-_LOCKS_CLEANUP_THRESHOLD = 750  # 1.5x maxsize=500
-
-# Session locks: serializa requests concurrentes del mismo usuario en ainvoke.
-_session_locks: dict[int, asyncio.Lock] = {}
-_SESSION_LOCKS_CLEANUP_THRESHOLD = 500
-
-
-# ---------------------------------------------------------------------------
-# Contexto runtime inyectado en las tools
-# ---------------------------------------------------------------------------
-
-@dataclass
-class AgentContext:
-    """Contexto runtime para el agente (inyectado en las tools)."""
-    id_empresa: int
-    session_id: int = 0
-
-
-# ---------------------------------------------------------------------------
-# Cleanup de locks obsoletos
-# ---------------------------------------------------------------------------
-
-def _cleanup_stale_agent_locks(current_cache_key: int) -> None:
-    """Elimina locks de agent_cache que ya no tienen entrada en el cache."""
-    if len(_agent_cache_locks) < _LOCKS_CLEANUP_THRESHOLD:
-        return
-    stale = [k for k in list(_agent_cache_locks) if k not in _agent_cache and k != current_cache_key]
-    for k in stale:
-        _agent_cache_locks.pop(k, None)
-    if stale:
-        logger.debug("[AGENT] Cleanup: %s agent locks eliminados", len(stale))
-
-
-def _cleanup_stale_session_locks(current_session_id: int) -> None:
-    """Elimina locks de sesión que ya no están en uso activo."""
-    if len(_session_locks) < _SESSION_LOCKS_CLEANUP_THRESHOLD:
-        return
-    stale = [
-        k for k in list(_session_locks)
-        if k != current_session_id and not _session_locks[k].locked()
-    ]
-    for k in stale:
-        _session_locks.pop(k, None)
-    if stale:
-        logger.debug("[AGENT] Cleanup: %s session locks eliminados", len(stale))
-
-
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
@@ -174,24 +49,6 @@ def _validate_config(config: dict[str, Any]) -> None:
     logger.debug("[AGENT] Config validated: id_empresa=%s", config.get("id_empresa"))
 
 
-def _get_model():
-    """
-    Retorna el modelo LLM singleton, creándolo en la primera llamada.
-    init_chat_model es síncrono → no hay race condition en asyncio.
-    """
-    global _model
-    if _model is None:
-        logger.info("[AGENT] Inicializando modelo LLM: %s", app_config.OPENAI_MODEL)
-        _model = init_chat_model(
-            f"openai:{app_config.OPENAI_MODEL}",
-            api_key=app_config.OPENAI_API_KEY,
-            temperature=app_config.OPENAI_TEMPERATURE,
-            max_tokens=app_config.MAX_TOKENS,
-            timeout=app_config.OPENAI_TIMEOUT,
-        )
-    return _model
-
-
 async def _build_agent_for_empresa(id_empresa: int, config: dict[str, Any]):
     """
     Construye un nuevo agente para la empresa. Se llama SOLO en cache miss.
@@ -199,7 +56,7 @@ async def _build_agent_for_empresa(id_empresa: int, config: dict[str, Any]):
     el aislamiento de sesión lo provee el checkpointer vía thread_id.
     """
     logger.info("[AGENT] Construyendo agente para id_empresa=%s", id_empresa)
-    model = _get_model()
+    model = get_model()
     system_prompt = await build_ventas_system_prompt(config=config)
     agent = create_agent(
         model=model,
@@ -229,67 +86,30 @@ async def _get_agent(config: dict[str, Any]):
     cache_key = id_empresa
 
     # Fast path — sin lock
-    if cache_key in _agent_cache:
+    cached = get_cached_agent(cache_key)
+    if cached is not None:
         AGENT_CACHE.labels(result="hit").inc()
         logger.debug("[AGENT] Cache HIT id_empresa=%s", id_empresa)
-        return _agent_cache[cache_key]
+        return cached
 
-    _cleanup_stale_agent_locks(cache_key)
-    lock = _agent_cache_locks.setdefault(cache_key, asyncio.Lock())
+    lock = acquire_agent_lock(cache_key)
     try:
         async with lock:
             # Double-check: otro request puede haber construido el agente
             # mientras esperábamos el lock
-            if cache_key in _agent_cache:
+            cached = get_cached_agent(cache_key)
+            if cached is not None:
                 AGENT_CACHE.labels(result="hit").inc()
                 logger.debug("[AGENT] Cache HIT (post-lock) id_empresa=%s", id_empresa)
-                return _agent_cache[cache_key]
+                return cached
 
             AGENT_CACHE.labels(result="miss").inc()
             logger.info("[AGENT] Cache MISS id_empresa=%s — iniciando build", id_empresa)
             agent = await _build_agent_for_empresa(id_empresa, config)
-            _agent_cache[cache_key] = agent
+            cache_agent(cache_key, agent)
             return agent
     finally:
-        _agent_cache_locks.pop(cache_key, None)
-
-
-def _prepare_agent_context(config: dict[str, Any], session_id: int) -> AgentContext:
-    return AgentContext(
-        id_empresa=config["id_empresa"],
-        session_id=session_id,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Procesamiento de contenido (texto + visión)
-# ---------------------------------------------------------------------------
-
-_IMAGE_URL_RE = re.compile(
-    r"https?://\S+\.(?:jpg|jpeg|png|gif|webp)(?:\?\S*)?",
-    re.IGNORECASE,
-)
-_MAX_IMAGES = 10  # límite de OpenAI Vision
-
-
-def _build_content(message: str) -> str | list[dict]:
-    """
-    Devuelve string si no hay URLs de imagen (Caso 1),
-    o lista de bloques OpenAI Vision si las hay (Casos 2-5).
-    """
-    urls = _IMAGE_URL_RE.findall(message)
-    if not urls:
-        return message
-
-    urls = urls[:_MAX_IMAGES]
-    text = _IMAGE_URL_RE.sub("", message).strip()
-
-    blocks: list[dict] = []
-    if text:
-        blocks.append({"type": "text", "text": text})
-    for url in urls:
-        blocks.append({"type": "image_url", "image_url": {"url": url}})
-    return blocks
+        release_agent_lock(cache_key)
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +127,7 @@ async def process_venta_message(
     El agente se obtiene del cache por id_empresa (TTL=AGENT_CACHE_TTL_MINUTES min).
     El historial de conversación se aísla por session_id via thread_id
     en el checkpointer (InMemorySaver). Los requests concurrentes del mismo
-    session_id se serializan vía _session_locks para evitar race conditions.
+    session_id se serializan vía session locks para evitar race conditions.
 
     Args:
         message: Mensaje del cliente
@@ -361,8 +181,7 @@ async def process_venta_message(
         run_config = {"configurable": {"thread_id": str(session_id)}}
 
         # Session lock: serializa requests concurrentes del mismo usuario
-        _cleanup_stale_session_locks(session_id)
-        session_lock = _session_locks.setdefault(session_id, asyncio.Lock())
+        session_lock = acquire_session_lock(session_id)
 
         try:
             with track_chat_response():
