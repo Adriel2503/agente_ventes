@@ -21,6 +21,7 @@ from .config import (
     HTTP_RETRY_WAIT_MAX,
     CB_THRESHOLD,
     CB_RESET_TTL,
+    MAX_CONCURRENT_AGENT,
     TIMEZONE,
 )
 from .circuit_breakers import informacion_cb, preguntas_cb
@@ -46,6 +47,7 @@ __all__ = [
     "HTTP_RETRY_WAIT_MAX",
     "CB_THRESHOLD",
     "CB_RESET_TTL",
+    "MAX_CONCURRENT_AGENT",
     "TIMEZONE",
     "informacion_cb",
     "preguntas_cb",

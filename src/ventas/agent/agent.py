@@ -44,6 +44,9 @@ _OPENAI_ERRORS: dict[type, tuple[str, str, str, str]] = {
     openai.BadRequestError:     ("warning",  "openai_bad_request", "OpenAI-400", "Tu mensaje no pudo ser procesado por el servicio, ¿puedes reformularlo?"),
 }
 
+# Backpressure: limita invocaciones concurrentes al agente (OpenAI + tools)
+_semaphore = asyncio.Semaphore(app_config.MAX_CONCURRENT_AGENT)
+
 
 class VentasStructuredResponse(BaseModel):
     """Schema para response_format. reply obligatorio; url opcional (ej. video/imagen de saludo)."""
@@ -296,60 +299,62 @@ async def process_venta_message(
     # Registrar request por empresa
     CHAT_REQUESTS.labels(empresa_id=_empresa_id).inc()
 
-    try:
-        agent = await _get_agent(config_data)
-    except Exception as e:
-        logger.error("[AGENT] Error obteniendo agente id_empresa=%s: %s", config_data.get("id_empresa"), e, exc_info=True)
-        record_chat_error("agent_creation_error")
-        return ("Disculpa, tuve un problema de configuración. ¿Podrías intentar nuevamente?", None)
+    # Backpressure: limitar invocaciones concurrentes al agente (OpenAI + tools)
+    async with _semaphore:
+        try:
+            agent = await _get_agent(config_data)
+        except Exception as e:
+            logger.error("[AGENT] Error obteniendo agente id_empresa=%s: %s", config_data.get("id_empresa"), e, exc_info=True)
+            record_chat_error("agent_creation_error")
+            return ("Disculpa, tuve un problema de configuración. ¿Podrías intentar nuevamente?", None)
 
-    agent_context = _prepare_agent_context(config_data, session_id)
-    run_config = {"configurable": {"thread_id": str(session_id)}}
+        agent_context = _prepare_agent_context(config_data, session_id)
+        run_config = {"configurable": {"thread_id": str(session_id)}}
 
-    # Session lock: serializa requests concurrentes del mismo usuario
-    _cleanup_stale_session_locks(session_id)
-    session_lock = _session_locks.setdefault(session_id, asyncio.Lock())
+        # Session lock: serializa requests concurrentes del mismo usuario
+        _cleanup_stale_session_locks(session_id)
+        session_lock = _session_locks.setdefault(session_id, asyncio.Lock())
 
-    try:
-        with track_chat_response():
-            async with session_lock:
-                logger.debug("[AGENT] Invocando agente — session=%s, empresa=%s", session_id, config_data.get("id_empresa"))
+        try:
+            with track_chat_response():
+                async with session_lock:
+                    logger.debug("[AGENT] Invocando agente — session=%s, empresa=%s", session_id, config_data.get("id_empresa"))
 
-                with track_llm_call():
-                    result = await agent.ainvoke(
-                        {"messages": [{"role": "user", "content": _build_content(message)}]},
-                        config=run_config,
-                        context=agent_context,
-                    )
+                    with track_llm_call():
+                        result = await agent.ainvoke(
+                            {"messages": [{"role": "user", "content": _build_content(message)}]},
+                            config=run_config,
+                            context=agent_context,
+                        )
 
-            structured = result.get("structured_response")
-            if isinstance(structured, VentasStructuredResponse):
-                reply = structured.reply or "Lo siento, no pude procesar tu solicitud."
-                url = structured.url if (structured.url and structured.url.strip()) else None
-            else:
-                messages = result.get("messages", [])
-                if messages:
-                    last_message = messages[-1]
-                    reply = (
-                        last_message.content
-                        if hasattr(last_message, "content")
-                        else str(last_message)
-                    )
+                structured = result.get("structured_response")
+                if isinstance(structured, VentasStructuredResponse):
+                    reply = structured.reply or "Lo siento, no pude procesar tu solicitud."
+                    url = structured.url if (structured.url and structured.url.strip()) else None
                 else:
-                    reply = "Lo siento, no pude procesar tu solicitud."
-                url = None
+                    messages = result.get("messages", [])
+                    if messages:
+                        last_message = messages[-1]
+                        reply = (
+                            last_message.content
+                            if hasattr(last_message, "content")
+                            else str(last_message)
+                        )
+                    else:
+                        reply = "Lo siento, no pude procesar tu solicitud."
+                    url = None
 
-            logger.debug("[AGENT] Respuesta generada: %s...", (reply[:200], url))
+                logger.debug("[AGENT] Respuesta generada: %s...", (reply[:200], url))
 
-    except tuple(_OPENAI_ERRORS.keys()) as e:
-        log_level, error_key, log_tag, user_msg = _OPENAI_ERRORS[type(e)]
-        getattr(logger, log_level)("[AGENT][%s] Session: %s | %s", log_tag, session_id, e)
-        record_chat_error(error_key)
-        return (user_msg, None)
+        except tuple(_OPENAI_ERRORS.keys()) as e:
+            log_level, error_key, log_tag, user_msg = _OPENAI_ERRORS[type(e)]
+            getattr(logger, log_level)("[AGENT][%s] Session: %s | %s", log_tag, session_id, e)
+            record_chat_error(error_key)
+            return (user_msg, None)
 
-    except Exception as e:
-        logger.error("[AGENT] Error ejecutando agente session=%s: %s", session_id, e, exc_info=True)
-        record_chat_error("agent_execution_error")
-        return ("Disculpa, tuve un problema al procesar tu mensaje. ¿Podrías intentar nuevamente?", None)
+        except Exception as e:
+            logger.error("[AGENT] Error ejecutando agente session=%s: %s", session_id, e, exc_info=True)
+            record_chat_error("agent_execution_error")
+            return ("Disculpa, tuve un problema al procesar tu mensaje. ¿Podrías intentar nuevamente?", None)
 
-    return (reply, url)
+        return (reply, url)
