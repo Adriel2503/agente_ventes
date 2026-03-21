@@ -16,6 +16,8 @@ Diseño de cache:
 import asyncio
 import re
 from dataclasses import dataclass
+
+import openai
 from typing import Any
 
 from cachetools import TTLCache
@@ -32,6 +34,15 @@ from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, CHAT_REQ
 from .prompts import build_ventas_system_prompt
 
 logger = get_logger(__name__)
+
+# Mapeo de errores OpenAI: tipo → (log_level, metric_key, log_tag, mensaje_usuario)
+_OPENAI_ERRORS: dict[type, tuple[str, str, str, str]] = {
+    openai.AuthenticationError: ("critical", "openai_auth_error", "OpenAI-401", "No puedo procesar tu mensaje, la clave de acceso al servicio no es válida."),
+    openai.RateLimitError:      ("warning",  "openai_rate_limit", "OpenAI-429", "Estoy recibiendo demasiadas solicitudes en este momento, por favor intenta en unos segundos."),
+    openai.InternalServerError: ("error",    "openai_server_error", "OpenAI-5xx", "El servicio de inteligencia artificial está presentando problemas, por favor intenta nuevamente."),
+    openai.APIConnectionError:  ("error",    "openai_connection_error", "OpenAI-conn", "No pude conectarme al servicio de inteligencia artificial, por favor intenta nuevamente."),
+    openai.BadRequestError:     ("warning",  "openai_bad_request", "OpenAI-400", "Tu mensaje no pudo ser procesado por el servicio, ¿puedes reformularlo?"),
+}
 
 
 class VentasStructuredResponse(BaseModel):
@@ -329,6 +340,12 @@ async def process_venta_message(
                 url = None
 
             logger.debug("[AGENT] Respuesta generada: %s...", (reply[:200], url))
+
+    except tuple(_OPENAI_ERRORS.keys()) as e:
+        log_level, error_key, log_tag, user_msg = _OPENAI_ERRORS[type(e)]
+        getattr(logger, log_level)("[AGENT][%s] Session: %s | %s", log_tag, session_id, e)
+        record_chat_error(error_key)
+        return (user_msg, None)
 
     except Exception as e:
         logger.error("[AGENT] Error ejecutando agente session=%s: %s", session_id, e, exc_info=True)
