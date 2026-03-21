@@ -59,11 +59,46 @@ class VentasStructuredResponse(BaseModel):
 # Singletons de módulo
 # ---------------------------------------------------------------------------
 
-_checkpointer = InMemorySaver(
-    serde=JsonPlusSerializer(
-        allowed_msgpack_modules=[("ventas.agent.agent", "VentasStructuredResponse")]
+_checkpointer = None
+
+
+def _make_memory_saver() -> InMemorySaver:
+    """Crea InMemorySaver con allowlist para VentasStructuredResponse."""
+    return InMemorySaver(
+        serde=JsonPlusSerializer(
+            allowed_msgpack_modules=[("ventas.agent.agent", "VentasStructuredResponse")]
+        )
     )
-)
+
+
+async def init_checkpointer() -> None:
+    """Inicializa el checkpointer. Llamar en lifespan startup."""
+    global _checkpointer
+    _checkpointer = _make_memory_saver()
+    logger.info("[AGENT] Checkpointer: InMemorySaver")
+
+
+def get_checkpointer():
+    """Retorna el checkpointer singleton. Lanza si no está inicializado."""
+    if _checkpointer is None:
+        raise RuntimeError(
+            "Checkpointer no inicializado. Llamar await init_checkpointer() primero."
+        )
+    return _checkpointer
+
+
+async def close_checkpointer() -> None:
+    """Cierra el checkpointer al apagar la app."""
+    global _checkpointer
+    if _checkpointer is None:
+        return
+    if hasattr(_checkpointer, "__aexit__"):
+        try:
+            await _checkpointer.__aexit__(None, None, None)
+            logger.info("[AGENT] Checkpointer cerrado correctamente")
+        except Exception as e:
+            logger.warning("[AGENT] Error cerrando checkpointer: %s", e)
+    _checkpointer = None
 
 # Modelo LLM: una sola instancia para todo el proceso.
 # init_chat_model es síncrono; no hay riesgo de race condition en asyncio.
@@ -169,7 +204,7 @@ async def _build_agent_for_empresa(id_empresa: int, config: dict[str, Any]):
         model=model,
         tools=AGENT_TOOLS,
         system_prompt=system_prompt,
-        checkpointer=_checkpointer,
+        checkpointer=get_checkpointer(),
         response_format=VentasStructuredResponse,
     )
     logger.info(
@@ -282,6 +317,18 @@ async def process_venta_message(
     """
     if not message or not message.strip():
         return ("No recibí tu mensaje. ¿Podrías repetirlo?", None)
+
+    # Comandos del sistema (interceptados antes del lock y del agente)
+    _cmd = message.strip().lower()
+    if _cmd == "/clear":
+        if session_id is not None and session_id >= 0:
+            await get_checkpointer().adelete_thread(str(session_id))
+        logger.info("[CMD] /clear - Session: %s | Historial borrado", session_id)
+        return ("Historial limpiado. ¿En qué puedo ayudarte?", None)
+
+    if _cmd == "/restart":
+        logger.warning("[CMD] /restart - Session: %s | Comando reservado, sin acción", session_id)
+        return ("Este comando está reservado para administradores.", None)
 
     if session_id is None or session_id < 0:
         raise ValueError("session_id es requerido (entero no negativo)")
