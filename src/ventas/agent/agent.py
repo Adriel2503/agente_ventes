@@ -11,13 +11,13 @@ from langchain.agents import create_agent
 from .. import config as app_config
 from ..tool.tools import AGENT_TOOLS
 from ..logger import get_logger
-from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, CHAT_REQUESTS, record_chat_error
+from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, CHAT_REQUESTS, record_chat_error, update_cache_stats
 from .prompts import build_ventas_system_prompt
 from .content import VentasStructuredResponse, _build_content
 from .context import _prepare_agent_context
 from .runtime import (
     get_model, get_checkpointer,
-    get_cached_agent, cache_agent, agent_cache_ttl,
+    get_cached_agent, cache_agent, agent_cache_size, agent_cache_ttl,
     acquire_agent_lock, release_agent_lock, acquire_session_lock,
     message_window,
 )
@@ -83,12 +83,13 @@ async def _get_agent(config: dict[str, Any]):
       Mismo patrón que agent_citas.
     """
     id_empresa: int = config["id_empresa"]
-    cache_key = id_empresa
+    cache_key: tuple = (id_empresa,)
 
     # Fast path — sin lock
     cached = get_cached_agent(cache_key)
     if cached is not None:
         AGENT_CACHE.labels(result="hit").inc()
+        update_cache_stats("agent", agent_cache_size())
         logger.debug("[AGENT] Cache HIT id_empresa=%s", id_empresa)
         return cached
 
@@ -100,6 +101,7 @@ async def _get_agent(config: dict[str, Any]):
             cached = get_cached_agent(cache_key)
             if cached is not None:
                 AGENT_CACHE.labels(result="hit").inc()
+                update_cache_stats("agent", agent_cache_size())
                 logger.debug("[AGENT] Cache HIT (post-lock) id_empresa=%s", id_empresa)
                 return cached
 
@@ -107,6 +109,7 @@ async def _get_agent(config: dict[str, Any]):
             logger.info("[AGENT] Cache MISS id_empresa=%s — iniciando build", id_empresa)
             agent = await _build_agent_for_empresa(id_empresa, config)
             cache_agent(cache_key, agent)
+            update_cache_stats("agent", agent_cache_size())
             return agent
     finally:
         release_agent_lock(cache_key)
@@ -197,19 +200,26 @@ async def process_venta_message(
 
                 structured = result.get("structured_response")
                 if isinstance(structured, VentasStructuredResponse):
-                    reply = structured.reply or "Lo siento, no pude procesar tu solicitud."
+                    if structured.reply is None:
+                        logger.warning("[AGENT] structured.reply es None - Session: %s", session_id)
+                        reply = "No recibí respuesta del asistente, por favor intenta nuevamente."
+                    elif structured.reply == "":
+                        logger.warning("[AGENT] structured.reply es string vacío - Session: %s", session_id)
+                        reply = "El asistente envió una respuesta vacía, por favor intenta nuevamente."
+                    else:
+                        reply = structured.reply
                     url = structured.url if (structured.url and structured.url.strip()) else None
                 else:
+                    logger.warning("[AGENT] Respuesta fuera de formato estructurado - Session: %s", session_id)
                     messages = result.get("messages", [])
                     if messages:
                         last_message = messages[-1]
-                        reply = (
-                            last_message.content
-                            if hasattr(last_message, "content")
-                            else str(last_message)
-                        )
+                        reply = last_message.content if hasattr(last_message, "content") else str(last_message)
+                        if not reply:
+                            logger.warning("[AGENT] last_message.content vacío - Session: %s", session_id)
+                            reply = "El asistente respondió en un formato inesperado, por favor intenta nuevamente."
                     else:
-                        reply = "Lo siento, no pude procesar tu solicitud."
+                        reply = "El asistente respondió en un formato inesperado, por favor intenta nuevamente."
                     url = None
 
                 logger.debug("[AGENT] Respuesta generada: %s...", (reply[:200], url))

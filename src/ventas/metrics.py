@@ -7,7 +7,7 @@ Expone contadores, histogramas e info estática para Prometheus.
 import time
 from contextlib import contextmanager
 
-from prometheus_client import Counter, Histogram, Info
+from prometheus_client import Counter, Gauge, Histogram, Info
 
 # ---------------------------------------------------------------------------
 # Info estática (versión, modelo)
@@ -97,6 +97,21 @@ SEARCH_CACHE = Counter(
     ["result"],  # hit | miss | circuit_open
 )
 
+# ---------------------------------------------------------------------------
+# Gauges (estado actual)
+# ---------------------------------------------------------------------------
+
+cache_entries = Gauge(
+    "ventas_cache_entries",
+    "Número de entradas en cache",
+    ["cache_type"],
+)
+
+
+def update_cache_stats(cache_type: str, count: int) -> None:
+    """Actualiza estadísticas de cache."""
+    cache_entries.labels(cache_type=cache_type).set(count)
+
 
 # ---------------------------------------------------------------------------
 # Por empresa (como agent_citas)
@@ -166,6 +181,8 @@ __all__ = [
     "SEARCH_CACHE",
     "CHAT_REQUESTS",
     "CHAT_ERRORS",
+    "cache_entries",
+    "update_cache_stats",
     "track_chat_response",
     "track_llm_call",
     "record_chat_error",

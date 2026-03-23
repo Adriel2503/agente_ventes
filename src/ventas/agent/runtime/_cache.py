@@ -30,7 +30,7 @@ _agent_cache: TTLCache = TTLCache(
 
 # Un lock por cache_key para evitar thundering herd al crear el agente por primera vez.
 # Crece con cada id_empresa nuevo; se limpia cuando supera _LOCKS_CLEANUP_THRESHOLD.
-_agent_cache_locks: dict[int, asyncio.Lock] = {}
+_agent_cache_locks: dict[tuple, asyncio.Lock] = {}
 _LOCKS_CLEANUP_THRESHOLD = int(app_config.AGENT_CACHE_MAXSIZE * 1.5)  # 1.5x cache maxsize
 
 # Un lock por session_id para serializar requests concurrentes del mismo usuario.
@@ -45,12 +45,12 @@ _SESSION_LOCKS_CLEANUP_THRESHOLD = app_config.AGENT_CACHE_MAXSIZE  # escala con 
 # Operaciones del agent cache
 # ---------------------------------------------------------------------------
 
-def get_cached_agent(cache_key: int) -> Any | None:
+def get_cached_agent(cache_key: tuple) -> Any | None:
     """Retorna el agente cacheado o None si no existe / expiró."""
     return _agent_cache.get(cache_key)
 
 
-def cache_agent(cache_key: int, agent: Any) -> None:
+def cache_agent(cache_key: tuple, agent: Any) -> None:
     """Almacena un agente compilado en el cache."""
     _agent_cache[cache_key] = agent
 
@@ -69,7 +69,7 @@ def agent_cache_size() -> int:
 # Operaciones de agent locks (thundering herd)
 # ---------------------------------------------------------------------------
 
-def acquire_agent_lock(cache_key: int) -> asyncio.Lock:
+def acquire_agent_lock(cache_key: tuple) -> asyncio.Lock:
     """
     Retorna el lock para un cache_key, creándolo si no existe.
     Ejecuta limpieza de locks huérfanos si se supera el threshold.
@@ -78,7 +78,7 @@ def acquire_agent_lock(cache_key: int) -> asyncio.Lock:
     return _agent_cache_locks.setdefault(cache_key, asyncio.Lock())
 
 
-def release_agent_lock(cache_key: int) -> None:
+def release_agent_lock(cache_key: tuple) -> None:
     """Elimina el lock del registro tras completar la creación del agente."""
     _agent_cache_locks.pop(cache_key, None)
 
@@ -100,7 +100,7 @@ def acquire_session_lock(session_id: int) -> asyncio.Lock:
 # Limpieza interna (privada)
 # ---------------------------------------------------------------------------
 
-def _cleanup_stale_agent_locks(current_cache_key: int) -> None:
+def _cleanup_stale_agent_locks(current_cache_key: tuple) -> None:
     """
     Elimina locks de _agent_cache_locks cuyas claves ya no están en _agent_cache.
     Solo se ejecuta si el dict supera _LOCKS_CLEANUP_THRESHOLD.

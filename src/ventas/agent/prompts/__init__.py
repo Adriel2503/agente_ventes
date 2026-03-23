@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader
 
 from ... import config as app_config
 from ...logger import get_logger
@@ -37,7 +37,7 @@ _MESES_ESPANOL = [
 # descarta ese cache y re-lee disco en cada llamada.
 _jinja_env = Environment(
     loader=FileSystemLoader(str(_TEMPLATES_DIR)),
-    autoescape=select_autoescape(disabled_extensions=()),
+    autoescape=False,
 )
 _template = _jinja_env.get_template("ventas_system.j2")
 
