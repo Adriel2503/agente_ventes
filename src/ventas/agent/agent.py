@@ -2,13 +2,15 @@
 Lógica del agente especializado en venta directa usando LangChain 1.2+ API moderna.
 """
 
+from __future__ import annotations
+
 import asyncio
-from typing import Any
 
 import openai
 from langchain.agents import create_agent
 
 from .. import config as app_config
+from ..schemas import VentasConfig
 from ..tool.tools import AGENT_TOOLS
 from ..logger import get_logger
 from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, CHAT_REQUESTS, record_chat_error, update_cache_stats
@@ -41,15 +43,7 @@ _semaphore = asyncio.Semaphore(app_config.MAX_CONCURRENT_AGENT)
 # Helpers internos
 # ---------------------------------------------------------------------------
 
-def _validate_config(config: dict[str, Any]) -> None:
-    required_keys = ["id_empresa"]
-    missing = [k for k in required_keys if k not in config or config[k] is None]
-    if missing:
-        raise ValueError(f"Config missing required keys: {missing}")
-    logger.debug("[AGENT] Config validated: id_empresa=%s", config.get("id_empresa"))
-
-
-async def _build_agent_for_empresa(id_empresa: int, config: dict[str, Any]):
+async def _build_agent_for_empresa(id_empresa: int, config: VentasConfig):
     """
     Construye un nuevo agente para la empresa. Se llama SOLO en cache miss.
     El agente resultante es compartido por todos los usuarios de esa empresa;
@@ -57,7 +51,7 @@ async def _build_agent_for_empresa(id_empresa: int, config: dict[str, Any]):
     """
     logger.info("[AGENT] Construyendo agente para id_empresa=%s", id_empresa)
     model = get_model()
-    system_prompt = await build_ventas_system_prompt(config=config)
+    system_prompt = await build_ventas_system_prompt(id_empresa=id_empresa, config=config)
     agent = create_agent(
         model=model,
         tools=AGENT_TOOLS,
@@ -73,7 +67,7 @@ async def _build_agent_for_empresa(id_empresa: int, config: dict[str, Any]):
     return agent
 
 
-async def _get_agent(config: dict[str, Any]):
+async def _get_agent(id_empresa: int, config: VentasConfig):
     """
     Retorna el agente para esta empresa.
 
@@ -82,7 +76,6 @@ async def _get_agent(config: dict[str, Any]):
       N requests concurrentes serializan; solo el primero construye.
       Mismo patrón que agent_citas.
     """
-    id_empresa: int = config["id_empresa"]
     cache_key: tuple = (id_empresa,)
 
     # Fast path — sin lock
@@ -122,7 +115,8 @@ async def _get_agent(config: dict[str, Any]):
 async def process_venta_message(
     message: str,
     session_id: int,
-    config: dict[str, Any],
+    id_empresa: int,
+    config: VentasConfig | None,
 ) -> tuple[str, str | None]:
     """
     Procesa un mensaje del cliente sobre ventas usando el agente LangChain.
@@ -135,7 +129,8 @@ async def process_venta_message(
     Args:
         message: Mensaje del cliente
         session_id: ID estable del usuario (viene del gateway)
-        config: Configuración de la empresa (id_empresa, nombre_negocio, personalidad, etc.)
+        id_empresa: ID de la empresa
+        config: Configuración opcional del bot (VentasConfig)
 
     Returns:
         Tupla (reply, url). url es None cuando no hay medio que adjuntar.
@@ -158,15 +153,8 @@ async def process_venta_message(
     if session_id is None or session_id < 0:
         raise ValueError("session_id es requerido (entero no negativo)")
 
-    try:
-        _validate_config(config)
-    except ValueError as e:
-        logger.error("[AGENT] Error de config: %s", e)
-        record_chat_error("config_error")
-        return (f"Error de configuración: {str(e)}", None)
-
-    config_data = dict(config)
-    _empresa_id = str(config_data.get("id_empresa", "unknown"))
+    config = config or VentasConfig()
+    _empresa_id = str(id_empresa)
 
     # Registrar request por empresa
     CHAT_REQUESTS.labels(empresa_id=_empresa_id).inc()
@@ -174,13 +162,13 @@ async def process_venta_message(
     # Backpressure: limitar invocaciones concurrentes al agente (OpenAI + tools)
     async with _semaphore:
         try:
-            agent = await _get_agent(config_data)
+            agent = await _get_agent(id_empresa, config)
         except Exception as e:
-            logger.error("[AGENT] Error obteniendo agente id_empresa=%s: %s", config_data.get("id_empresa"), e, exc_info=True)
+            logger.error("[AGENT] Error obteniendo agente id_empresa=%s: %s", id_empresa, e, exc_info=True)
             record_chat_error("agent_creation_error")
             return ("Disculpa, tuve un problema de configuración. ¿Podrías intentar nuevamente?", None)
 
-        agent_context = _prepare_agent_context(config_data, session_id)
+        agent_context = _prepare_agent_context(id_empresa, session_id)
         run_config = {"configurable": {"thread_id": str(session_id)}}
 
         # Session lock: serializa requests concurrentes del mismo usuario
@@ -189,7 +177,7 @@ async def process_venta_message(
         try:
             with track_chat_response():
                 async with session_lock:
-                    logger.debug("[AGENT] Invocando agente — session=%s, empresa=%s", session_id, config_data.get("id_empresa"))
+                    logger.debug("[AGENT] Invocando agente — session=%s, empresa=%s", session_id, id_empresa)
 
                     with track_llm_call():
                         result = await agent.ainvoke(
