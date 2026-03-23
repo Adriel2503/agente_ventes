@@ -139,6 +139,22 @@ CACHE_ENTRIES = Gauge(
 )
 
 # ---------------------------------------------------------------------------
+# Tokens LLM
+# ---------------------------------------------------------------------------
+
+LLM_TOKENS = Counter(
+    "ventas_llm_tokens_total",
+    "Total de tokens consumidos",
+    ["type"],  # input | output | total
+)
+
+LLM_TOKENS_BY_EMPRESA = Counter(
+    "ventas_llm_tokens_by_empresa_total",
+    "Tokens consumidos por empresa",
+    ["empresa_id", "type"],  # input | output | total
+)
+
+# ---------------------------------------------------------------------------
 # Por empresa
 # ---------------------------------------------------------------------------
 
@@ -245,6 +261,17 @@ def record_tool_validation_error(tool_name: str) -> None:
     TOOL_ERRORS.labels(tool_name=tool_name, error_type="validation_error").inc()
 
 
+def record_token_usage(empresa_id: str, input_tokens: int, output_tokens: int) -> None:
+    """Registra tokens consumidos (global + por empresa)."""
+    total = input_tokens + output_tokens
+    LLM_TOKENS.labels(type="input").inc(input_tokens)
+    LLM_TOKENS.labels(type="output").inc(output_tokens)
+    LLM_TOKENS.labels(type="total").inc(total)
+    LLM_TOKENS_BY_EMPRESA.labels(empresa_id=empresa_id, type="input").inc(input_tokens)
+    LLM_TOKENS_BY_EMPRESA.labels(empresa_id=empresa_id, type="output").inc(output_tokens)
+    LLM_TOKENS_BY_EMPRESA.labels(empresa_id=empresa_id, type="total").inc(total)
+
+
 __all__ = [
     # Info
     "AGENT_INFO",
@@ -256,6 +283,8 @@ __all__ = [
     "LLM_REQUESTS",
     "LLM_DURATION",
     "CHAT_RESPONSE_DURATION",
+    "LLM_TOKENS",
+    "LLM_TOKENS_BY_EMPRESA",
     # Cache
     "AGENT_CACHE",
     "SEARCH_CACHE",
@@ -279,4 +308,5 @@ __all__ = [
     "update_cache_stats",
     "record_chat_error",
     "record_tool_validation_error",
+    "record_token_usage",
 ]

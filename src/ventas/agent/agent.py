@@ -13,7 +13,7 @@ from .. import config as app_config
 from ..schemas import VentasConfig
 from ..tool.tools import AGENT_TOOLS
 from ..logger import get_logger
-from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, CHAT_REQUESTS, record_chat_error, update_cache_stats
+from ..metrics import AGENT_CACHE, track_chat_response, track_llm_call, CHAT_REQUESTS, record_chat_error, update_cache_stats, record_token_usage
 from .prompts import build_ventas_system_prompt
 from .content import VentasStructuredResponse, _build_content
 from .context import _prepare_agent_context
@@ -209,6 +209,19 @@ async def process_venta_message(
                     else:
                         reply = "El asistente respondió en un formato inesperado, por favor intenta nuevamente."
                     url = None
+
+                # Extraer tokens de todos los AIMessage
+                _input_tokens = 0
+                _output_tokens = 0
+                for msg in result.get("messages", []):
+                    um = getattr(msg, "usage_metadata", None)
+                    if um:
+                        _input_tokens += um.get("input_tokens", 0)
+                        _output_tokens += um.get("output_tokens", 0)
+                if _input_tokens or _output_tokens:
+                    record_token_usage(_empresa_id, _input_tokens, _output_tokens)
+                    logger.debug("[AGENT] Tokens — input=%s, output=%s, total=%s, empresa=%s",
+                                 _input_tokens, _output_tokens, _input_tokens + _output_tokens, _empresa_id)
 
                 logger.debug("[AGENT] Respuesta generada: %s...", (reply[:200], url))
 
