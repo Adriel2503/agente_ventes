@@ -8,6 +8,7 @@ Consumido directamente por el gateway; sin protocolo MCP.
 import asyncio
 import logging
 import time
+import uuid
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -19,7 +20,7 @@ from prometheus_client import make_asgi_app
 from . import config as app_config, __version__
 from .agent import process_venta_message, init_checkpointer, close_checkpointer
 from .schemas import ChatRequest, ChatResponse
-from .logger import setup_logging, get_logger
+from .logger import setup_logging, get_logger, trace_id
 from .metrics import initialize_agent_info, HTTP_REQUESTS, HTTP_DURATION
 from .infra import close_http_client
 from .config import informacion_cb, preguntas_cb
@@ -97,6 +98,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
     Returns:
         JSON con campo reply (texto del agente) y url (opcional, ej. video/imagen de saludo)
     """
+    trace_id.set(uuid.uuid4().hex[:8])
     config = req.config
 
     logger.info("[HTTP] Mensaje recibido - Session: %s, Empresa: %s, Length: %s chars", req.session_id, req.id_empresa, len(req.message))
@@ -173,7 +175,7 @@ async def health():
 # Entrypoint
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
+def main():
     logger.info("=" * 60)
     logger.info("INICIANDO SERVICIO VENTAS - MaravIA")
     logger.info("=" * 60)
@@ -195,3 +197,7 @@ if __name__ == "__main__":
         host=app_config.SERVER_HOST,
         port=app_config.SERVER_PORT,
     )
+
+
+if __name__ == "__main__":
+    main()
