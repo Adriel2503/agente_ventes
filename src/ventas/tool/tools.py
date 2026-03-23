@@ -42,8 +42,8 @@ async def search_productos_servicios(
         return "No tengo el contexto de empresa para buscar productos; no puedo mostrar el catálogo en este momento."
     id_empresa = ctx.id_empresa
 
-    with track_tool_execution("search_productos_servicios"):
-        try:
+    try:
+        with track_tool_execution("search_productos_servicios"):
             result = await buscar_productos_servicios(
                 id_empresa=id_empresa,
                 busqueda=busqueda,
@@ -61,16 +61,16 @@ async def search_productos_servicios(
             lineas.append(format_productos_para_respuesta(productos))
             return "\n".join(lineas)
 
-        except Exception as e:
-            logger.error(
-                "[TOOL] search_productos_servicios - %s: %s (busqueda=%r, id_empresa=%s)",
-                type(e).__name__,
-                e,
-                busqueda,
-                id_empresa,
-                exc_info=True,
-            )
-            return f"Error al buscar: {str(e)}. Intenta de nuevo."
+    except Exception as e:
+        logger.error(
+            "[TOOL] search_productos_servicios - %s: %s (busqueda=%r, id_empresa=%s)",
+            type(e).__name__,
+            e,
+            busqueda,
+            id_empresa,
+            exc_info=True,
+        )
+        return f"Error al buscar: {str(e)}. Intenta de nuevo."
 
 
 class ProductoItem(TypedDict):
@@ -144,8 +144,8 @@ async def registrar_pedido_delivery(
     id_empresa = ctx.id_empresa
     id_prospecto = getattr(ctx, "session_id", 0)
 
-    with track_tool_execution("registrar_pedido_delivery"):
-        try:
+    try:
+        with track_tool_execution("registrar_pedido_delivery"):
             return await _svc_registrar_pedido(
                 id_empresa=id_empresa,
                 id_prospecto=id_prospecto,
@@ -164,16 +164,16 @@ async def registrar_pedido_delivery(
                 fecha_entrega_estimada=fecha_entrega_estimada,
                 email=email,
             )
-        except Exception as e:
-            logger.error(
-                "[TOOL] registrar_pedido_delivery - %s: %s (id_empresa=%s, operacion=%r)",
-                type(e).__name__,
-                e,
-                id_empresa,
-                operacion,
-                exc_info=True,
-            )
-            return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
+    except Exception as e:
+        logger.error(
+            "[TOOL] registrar_pedido_delivery - %s: %s (id_empresa=%s, operacion=%r)",
+            type(e).__name__,
+            e,
+            id_empresa,
+            operacion,
+            exc_info=True,
+        )
+        return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
 
 
 @tool
@@ -234,8 +234,8 @@ async def registrar_pedido_sucursal(
     id_empresa = ctx.id_empresa
     id_prospecto = getattr(ctx, "session_id", 0)
 
-    with track_tool_execution("registrar_pedido_sucursal"):
-        try:
+    try:
+        with track_tool_execution("registrar_pedido_sucursal"):
             return await _svc_registrar_pedido(
                 id_empresa=id_empresa,
                 id_prospecto=id_prospecto,
@@ -251,16 +251,16 @@ async def registrar_pedido_sucursal(
                 email=email,
                 sucursal=sucursal,
             )
-        except Exception as e:
-            logger.error(
-                "[TOOL] registrar_pedido_sucursal - %s: %s (id_empresa=%s, operacion=%r)",
-                type(e).__name__,
-                e,
-                id_empresa,
-                operacion,
-                exc_info=True,
-            )
-            return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
+    except Exception as e:
+        logger.error(
+            "[TOOL] registrar_pedido_sucursal - %s: %s (id_empresa=%s, operacion=%r)",
+            type(e).__name__,
+            e,
+            id_empresa,
+            operacion,
+            exc_info=True,
+        )
+        return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
 
 
 AGENT_TOOLS = [search_productos_servicios, registrar_pedido_delivery, registrar_pedido_sucursal]
