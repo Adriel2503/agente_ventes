@@ -11,7 +11,7 @@ from typing import TypedDict
 from langchain.tools import tool, ToolRuntime
 
 from ..logger import get_logger
-from ..metrics import TOOL_CALLS
+from ..metrics import track_tool_execution
 from ..services.busqueda_productos import buscar_productos_servicios, format_productos_para_respuesta
 from ..services.registrar_pedido import registrar_pedido as _svc_registrar_pedido
 
@@ -42,39 +42,35 @@ async def search_productos_servicios(
         return "No tengo el contexto de empresa para buscar productos; no puedo mostrar el catálogo en este momento."
     id_empresa = ctx.id_empresa
 
-    _tool_status = "ok"
-    try:
-        result = await buscar_productos_servicios(
-            id_empresa=id_empresa,
-            busqueda=busqueda,
-            log_search_apis=True,
-        )
+    with track_tool_execution("search_productos_servicios"):
+        try:
+            result = await buscar_productos_servicios(
+                id_empresa=id_empresa,
+                busqueda=busqueda,
+                log_search_apis=True,
+            )
 
-        if not result["success"]:
-            return result.get("error", "No se pudo completar la búsqueda.")
+            if not result["success"]:
+                return result.get("error", "No se pudo completar la búsqueda.")
 
-        productos = result.get("productos", [])
-        if not productos:
-            return f"No encontré productos o servicios que coincidan con '{busqueda}'. Prueba con otros términos."
+            productos = result.get("productos", [])
+            if not productos:
+                return f"No encontré productos o servicios que coincidan con '{busqueda}'. Prueba con otros términos."
 
-        lineas = [f"Encontré {len(productos)} resultado(s) para '{busqueda}':\n"]
-        lineas.append(format_productos_para_respuesta(productos))
-        return "\n".join(lineas)
+            lineas = [f"Encontré {len(productos)} resultado(s) para '{busqueda}':\n"]
+            lineas.append(format_productos_para_respuesta(productos))
+            return "\n".join(lineas)
 
-    except Exception as e:
-        _tool_status = "error"
-        logger.error(
-            "[TOOL] search_productos_servicios - %s: %s (busqueda=%r, id_empresa=%s)",
-            type(e).__name__,
-            e,
-            busqueda,
-            id_empresa,
-            exc_info=True,
-        )
-        return f"Error al buscar: {str(e)}. Intenta de nuevo."
-
-    finally:
-        TOOL_CALLS.labels(tool="search_productos_servicios", status=_tool_status).inc()
+        except Exception as e:
+            logger.error(
+                "[TOOL] search_productos_servicios - %s: %s (busqueda=%r, id_empresa=%s)",
+                type(e).__name__,
+                e,
+                busqueda,
+                id_empresa,
+                exc_info=True,
+            )
+            return f"Error al buscar: {str(e)}. Intenta de nuevo."
 
 
 class ProductoItem(TypedDict):
@@ -148,40 +144,36 @@ async def registrar_pedido_delivery(
     id_empresa = ctx.id_empresa
     id_prospecto = getattr(ctx, "session_id", 0)
 
-    _tool_status = "ok"
-    try:
-        return await _svc_registrar_pedido(
-            id_empresa=id_empresa,
-            id_prospecto=id_prospecto,
-            productos=productos,
-            operacion=operacion,
-            modalidad="Delivery",
-            tipo_envio=tipo_envio,
-            nombre=nombre,
-            dni=dni,
-            celular=celular,
-            medio_pago=medio_pago,
-            monto_pagado=monto_pagado,
-            direccion=direccion,
-            costo_envio=costo_envio,
-            observacion=observacion,
-            fecha_entrega_estimada=fecha_entrega_estimada,
-            email=email,
-        )
-    except Exception as e:
-        _tool_status = "error"
-        logger.error(
-            "[TOOL] registrar_pedido_delivery - %s: %s (id_empresa=%s, operacion=%r)",
-            type(e).__name__,
-            e,
-            id_empresa,
-            operacion,
-            exc_info=True,
-        )
-        return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
-
-    finally:
-        TOOL_CALLS.labels(tool="registrar_pedido_delivery", status=_tool_status).inc()
+    with track_tool_execution("registrar_pedido_delivery"):
+        try:
+            return await _svc_registrar_pedido(
+                id_empresa=id_empresa,
+                id_prospecto=id_prospecto,
+                productos=productos,
+                operacion=operacion,
+                modalidad="Delivery",
+                tipo_envio=tipo_envio,
+                nombre=nombre,
+                dni=dni,
+                celular=celular,
+                medio_pago=medio_pago,
+                monto_pagado=monto_pagado,
+                direccion=direccion,
+                costo_envio=costo_envio,
+                observacion=observacion,
+                fecha_entrega_estimada=fecha_entrega_estimada,
+                email=email,
+            )
+        except Exception as e:
+            logger.error(
+                "[TOOL] registrar_pedido_delivery - %s: %s (id_empresa=%s, operacion=%r)",
+                type(e).__name__,
+                e,
+                id_empresa,
+                operacion,
+                exc_info=True,
+            )
+            return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
 
 
 @tool
@@ -242,37 +234,33 @@ async def registrar_pedido_sucursal(
     id_empresa = ctx.id_empresa
     id_prospecto = getattr(ctx, "session_id", 0)
 
-    _tool_status = "ok"
-    try:
-        return await _svc_registrar_pedido(
-            id_empresa=id_empresa,
-            id_prospecto=id_prospecto,
-            productos=productos,
-            operacion=operacion,
-            modalidad="Sucursal",
-            nombre=nombre,
-            dni=dni,
-            celular=celular,
-            medio_pago=medio_pago,
-            monto_pagado=monto_pagado,
-            observacion=observacion,
-            email=email,
-            sucursal=sucursal,
-        )
-    except Exception as e:
-        _tool_status = "error"
-        logger.error(
-            "[TOOL] registrar_pedido_sucursal - %s: %s (id_empresa=%s, operacion=%r)",
-            type(e).__name__,
-            e,
-            id_empresa,
-            operacion,
-            exc_info=True,
-        )
-        return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
-
-    finally:
-        TOOL_CALLS.labels(tool="registrar_pedido_sucursal", status=_tool_status).inc()
+    with track_tool_execution("registrar_pedido_sucursal"):
+        try:
+            return await _svc_registrar_pedido(
+                id_empresa=id_empresa,
+                id_prospecto=id_prospecto,
+                productos=productos,
+                operacion=operacion,
+                modalidad="Sucursal",
+                nombre=nombre,
+                dni=dni,
+                celular=celular,
+                medio_pago=medio_pago,
+                monto_pagado=monto_pagado,
+                observacion=observacion,
+                email=email,
+                sucursal=sucursal,
+            )
+        except Exception as e:
+            logger.error(
+                "[TOOL] registrar_pedido_sucursal - %s: %s (id_empresa=%s, operacion=%r)",
+                type(e).__name__,
+                e,
+                id_empresa,
+                operacion,
+                exc_info=True,
+            )
+            return f"Error al registrar el pedido: {str(e)}. Intenta de nuevo."
 
 
 AGENT_TOOLS = [search_productos_servicios, registrar_pedido_delivery, registrar_pedido_sucursal]
