@@ -86,7 +86,6 @@ def _get_log_level(key: str, default: str) -> str:
 # OpenAI (agente especializado en ventas)
 # ---------------------------------------------------------------------------
 
-OPENAI_API_KEY: str = _get_str("OPENAI_API_KEY", "")
 OPENAI_MODEL: str = _get_str("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_TEMPERATURE: float = _get_float("OPENAI_TEMPERATURE", 0.5, min_val=0.0, max_val=2.0)
 OPENAI_TIMEOUT: int = _get_int("OPENAI_TIMEOUT", 60, min_val=1, max_val=300)

@@ -5,6 +5,7 @@ Lógica del agente especializado en venta directa usando LangChain 1.2+ API mode
 from __future__ import annotations
 
 import asyncio
+import hashlib
 
 import openai
 from langchain.agents import create_agent
@@ -43,14 +44,14 @@ _semaphore = asyncio.Semaphore(app_config.MAX_CONCURRENT_AGENT)
 # Helpers internos
 # ---------------------------------------------------------------------------
 
-async def _build_agent_for_empresa(id_empresa: int, config: VentasConfig):
+async def _build_agent_for_empresa(id_empresa: int, api_key: str, config: VentasConfig):
     """
     Construye un nuevo agente para la empresa. Se llama SOLO en cache miss.
     El agente resultante es compartido por todos los usuarios de esa empresa;
     el aislamiento de sesión lo provee el checkpointer vía thread_id.
     """
     logger.info("[AGENT] Construyendo agente para id_empresa=%s", id_empresa)
-    model = get_model()
+    model = get_model(api_key)
     system_prompt = await build_ventas_system_prompt(id_empresa=id_empresa, config=config)
     agent = create_agent(
         model=model,
@@ -67,16 +68,16 @@ async def _build_agent_for_empresa(id_empresa: int, config: VentasConfig):
     return agent
 
 
-async def _get_agent(id_empresa: int, config: VentasConfig):
+async def _get_agent(id_empresa: int, api_key: str, config: VentasConfig):
     """
     Retorna el agente para esta empresa.
 
     - Fast path (cache hit): O(1), sin I/O.
-    - Slow path (cache miss): Lock por id_empresa + double-check post-lock.
+    - Slow path (cache miss): Lock por cache_key + double-check post-lock.
       N requests concurrentes serializan; solo el primero construye.
-      Mismo patrón que agent_citas.
     """
-    cache_key: tuple = (id_empresa,)
+    _key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:12]
+    cache_key: tuple = (id_empresa, _key_hash)
 
     # Fast path — sin lock
     cached = get_cached_agent(cache_key)
@@ -100,7 +101,7 @@ async def _get_agent(id_empresa: int, config: VentasConfig):
 
             AGENT_CACHE.labels(result="miss").inc()
             logger.info("[AGENT] Cache MISS id_empresa=%s — iniciando build", id_empresa)
-            agent = await _build_agent_for_empresa(id_empresa, config)
+            agent = await _build_agent_for_empresa(id_empresa, api_key, config)
             cache_agent(cache_key, agent)
             update_cache_stats("agent", agent_cache_size())
             return agent
@@ -116,6 +117,7 @@ async def process_venta_message(
     message: str,
     session_id: int,
     id_empresa: int,
+    api_key: str,
     config: VentasConfig | None,
 ) -> tuple[str, str | None]:
     """
@@ -162,7 +164,7 @@ async def process_venta_message(
     # Backpressure: limitar invocaciones concurrentes al agente (OpenAI + tools)
     async with _semaphore:
         try:
-            agent = await _get_agent(id_empresa, config)
+            agent = await _get_agent(id_empresa, api_key, config)
         except Exception as e:
             logger.error("[AGENT] Error obteniendo agente id_empresa=%s: %s", id_empresa, e, exc_info=True)
             record_chat_error("agent_creation_error")

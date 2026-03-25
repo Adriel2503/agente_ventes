@@ -51,6 +51,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4096)
     session_id: int
     id_empresa: int
+    api_key: str
     config: VentasConfig | None = None
 
 
