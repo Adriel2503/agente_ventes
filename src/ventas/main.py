@@ -187,6 +187,7 @@ def main():
     logger.info("Timeout chat:       %ss", app_config.CHAT_TIMEOUT)
     logger.info("Timezone: %s", app_config.TIMEZONE)
     logger.info("Circuit breaker threshold: %s fallos", app_config.CB_THRESHOLD)
+    logger.info("Redis checkpointer: %s", "activo" if app_config.REDIS_URL else "InMemorySaver")
     logger.info("Log Level: %s", app_config.LOG_LEVEL)
     logger.info("-" * 60)
     logger.info("Endpoint: POST /api/chat")

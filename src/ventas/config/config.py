@@ -93,6 +93,15 @@ MAX_TOKENS: int = _get_int("MAX_TOKENS", 2048, min_val=1, max_val=128000)
 
 
 # ---------------------------------------------------------------------------
+# Redis (checkpointer conversacional)
+# ---------------------------------------------------------------------------
+
+REDIS_URL: str = _get_str("REDIS_URL", "")
+REDIS_CHECKPOINT_TTL_HOURS: int = _get_int(
+    "REDIS_CHECKPOINT_TTL_HOURS", 24, min_val=0, max_val=8760
+)  # 0 = sin TTL, max 1 año
+
+# ---------------------------------------------------------------------------
 # Configuración del servidor
 # ---------------------------------------------------------------------------
 

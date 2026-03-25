@@ -19,6 +19,7 @@ dependencies = [
     "langchain-openai==1.1.10",      # init_chat_model("openai:gpt-4o-mini")
     "langgraph==1.0.10",             # Grafo del agente, flujo de mensajes
     "langgraph-checkpoint==4.0.1",   # InMemorySaver (checkpointer conversacional)
+    "langgraph-checkpoint-redis>=0.4.0",  # AsyncRedisSaver (Redis checkpointer)
 
     # --- HTTP y resiliencia ---
     "httpx==0.28.1",                 # Cliente async para APIs externas (MaravIA PHP)
