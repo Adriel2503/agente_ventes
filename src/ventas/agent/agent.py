@@ -27,13 +27,20 @@ from .runtime import (
 
 logger = get_logger(__name__)
 
-# Mapeo de errores OpenAI: tipo → (log_level, metric_key, log_tag, mensaje_usuario)
-_OPENAI_ERRORS: dict[type, tuple[str, str, str, str]] = {
-    openai.AuthenticationError: ("critical", "openai_auth_error", "OpenAI-401", "No puedo procesar tu mensaje, la clave de acceso al servicio no es válida."),
-    openai.RateLimitError:      ("warning",  "openai_rate_limit", "OpenAI-429", "Estoy recibiendo demasiadas solicitudes en este momento, por favor intenta en unos segundos."),
-    openai.InternalServerError: ("error",    "openai_server_error", "OpenAI-5xx", "El servicio de inteligencia artificial está presentando problemas, por favor intenta nuevamente."),
-    openai.APIConnectionError:  ("error",    "openai_connection_error", "OpenAI-conn", "No pude conectarme al servicio de inteligencia artificial, por favor intenta nuevamente."),
-    openai.BadRequestError:     ("warning",  "openai_bad_request", "OpenAI-400", "Tu mensaje no pudo ser procesado por el servicio, ¿puedes reformularlo?"),
+_ERROR_USER_MSG = "¡Hola! Gracias por tu mensaje. En este momento te voy a derivar con un asesor para que pueda ayudarte mejor."
+
+# Mapeo de errores OpenAI: tipo → (log_level, metric_key, log_tag)
+_OPENAI_ERRORS: dict[type, tuple[str, str, str]] = {
+    openai.AuthenticationError: ("critical", "openai_auth_error", "OpenAI-401"),
+    openai.PermissionDeniedError: ("critical", "openai_permission_denied", "OpenAI-403"),
+    openai.NotFoundError: ("error", "openai_not_found", "OpenAI-404"),
+    openai.RateLimitError: ("warning", "openai_rate_limit", "OpenAI-429"),
+    openai.InternalServerError: ("error", "openai_server_error", "OpenAI-5xx"),
+    openai.APITimeoutError: ("error", "openai_timeout", "OpenAI-timeout"),
+    openai.APIConnectionError: ("error", "openai_connection_error", "OpenAI-conn"),
+    openai.ContentFilterFinishReasonError: ("warning", "openai_content_filter", "OpenAI-filter"),
+    openai.LengthFinishReasonError: ("warning", "openai_length_limit", "OpenAI-length"),
+    openai.BadRequestError: ("warning", "openai_bad_request", "OpenAI-400"),
 }
 
 # Backpressure: limita invocaciones concurrentes al agente (OpenAI + tools)
@@ -228,14 +235,14 @@ async def process_venta_message(
                 logger.debug("[AGENT] Respuesta generada: %s...", (reply[:200], url))
 
         except tuple(_OPENAI_ERRORS.keys()) as e:
-            log_level, error_key, log_tag, user_msg = _OPENAI_ERRORS[type(e)]
+            log_level, error_key, log_tag = _OPENAI_ERRORS[type(e)]
             getattr(logger, log_level)("[AGENT][%s] Session: %s | %s", log_tag, session_id, e)
             record_chat_error(error_key)
-            return (user_msg, None)
+            return (_ERROR_USER_MSG, None)
 
         except Exception as e:
             logger.error("[AGENT] Error ejecutando agente session=%s: %s", session_id, e, exc_info=True)
             record_chat_error("agent_execution_error")
-            return ("Disculpa, tuve un problema al procesar tu mensaje. ¿Podrías intentar nuevamente?", None)
+            return (_ERROR_USER_MSG, None)
 
         return (reply, url)
